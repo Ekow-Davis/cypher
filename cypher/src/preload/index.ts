@@ -1,11 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Book, CreateBookInput, UpdateBookInput, Chapter } from '@shared/types'
+import type {
+  Book,
+  CreateBookInput,
+  UpdateBookInput,
+  Chapter,
+  CreateChapterOptions,
+  ChapterPlacement,
+  Volume
+} from '@shared/types'
 
-/**
- * The secure bridge. Everything the renderer may ask the main process to
- * do is listed here explicitly. The renderer never receives direct access
- * to Node, the filesystem, or ipcRenderer itself.
- */
 const cypher = {
   ping: (): Promise<string> => ipcRenderer.invoke('app:ping'),
   getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
@@ -40,15 +43,26 @@ const cypher = {
     ensureFirst: (bookId: number): Promise<Chapter[]> =>
       ipcRenderer.invoke('chapters:ensureFirst', bookId),
     get: (id: number): Promise<Chapter | null> => ipcRenderer.invoke('chapters:get', id),
-    create: (bookId: number, title?: string): Promise<Chapter> =>
-      ipcRenderer.invoke('chapters:create', bookId, title),
+    create: (bookId: number, opts?: CreateChapterOptions): Promise<Chapter> =>
+      ipcRenderer.invoke('chapters:create', bookId, opts),
     rename: (id: number, title: string): Promise<Chapter | null> =>
       ipcRenderer.invoke('chapters:rename', id, title),
     saveContent: (id: number, content: string, wordCount: number): Promise<Chapter | null> =>
       ipcRenderer.invoke('chapters:saveContent', id, content, wordCount),
-    reorder: (orderedIds: number[]): Promise<void> =>
-      ipcRenderer.invoke('chapters:reorder', orderedIds),
+    applyOrder: (items: ChapterPlacement[]): Promise<void> =>
+      ipcRenderer.invoke('chapters:applyOrder', items),
     remove: (id: number): Promise<void> => ipcRenderer.invoke('chapters:delete', id)
+  },
+
+  volumes: {
+    list: (bookId: number): Promise<Volume[]> => ipcRenderer.invoke('volumes:list', bookId),
+    create: (bookId: number, title?: string): Promise<Volume> =>
+      ipcRenderer.invoke('volumes:create', bookId, title),
+    rename: (id: number, title: string): Promise<Volume | null> =>
+      ipcRenderer.invoke('volumes:rename', id, title),
+    remove: (id: number): Promise<void> => ipcRenderer.invoke('volumes:delete', id),
+    reorder: (orderedIds: number[]): Promise<void> =>
+      ipcRenderer.invoke('volumes:reorder', orderedIds)
   }
 }
 

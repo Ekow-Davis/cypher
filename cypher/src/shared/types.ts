@@ -38,3 +38,21 @@ export interface Chapter {
   sort_order: number
   updated_at: string
 }
+
+export interface Volume {
+  id: number
+  book_id: number
+  title: string
+  sort_order: number
+}
+
+export interface ChapterPlacement {
+  id: number
+  volumeId: number | null
+  sortOrder: number
+}
+
+export interface CreateChapterOptions {
+  title?: string
+  volumeId?: number | null
+}

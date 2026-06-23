@@ -16,17 +16,19 @@ import {
   ensureFirstChapter,
   renameChapter,
   saveChapterContent,
-  reorderChapters,
+  applyChapterOrder,
   deleteChapter
 } from './db/repositories/chapters'
+import {
+  listVolumes,
+  createVolume,
+  renameVolume,
+  deleteVolume,
+  reorderVolumes
+} from './db/repositories/volumes'
 import { importCover } from './assets'
-import type { CreateBookInput, UpdateBookInput } from '@shared/types'
+import type { CreateBookInput, UpdateBookInput, CreateChapterOptions, ChapterPlacement } from '@shared/types'
 
-/**
- * Registers every IPC handler the renderer is allowed to call.
- * Each handler is a deliberate, auditable boundary between the UI and
- * privileged operations (disk, crypto, network) that live in main.
- */
 export function registerIpcHandlers(): void {
   // App / diagnostics
   ipcMain.handle('app:ping', () => 'pong')
@@ -51,13 +53,22 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('chapters:list', (_e, bookId: number) => listChapters(bookId))
   ipcMain.handle('chapters:ensureFirst', (_e, bookId: number) => ensureFirstChapter(bookId))
   ipcMain.handle('chapters:get', (_e, id: number) => getChapter(id))
-  ipcMain.handle('chapters:create', (_e, bookId: number, title?: string) =>
-    createChapter(bookId, title)
+  ipcMain.handle('chapters:create', (_e, bookId: number, opts?: CreateChapterOptions) =>
+    createChapter(bookId, opts)
   )
   ipcMain.handle('chapters:rename', (_e, id: number, title: string) => renameChapter(id, title))
   ipcMain.handle('chapters:saveContent', (_e, id: number, content: string, wordCount: number) =>
     saveChapterContent(id, content, wordCount)
   )
-  ipcMain.handle('chapters:reorder', (_e, orderedIds: number[]) => reorderChapters(orderedIds))
+  ipcMain.handle('chapters:applyOrder', (_e, items: ChapterPlacement[]) => applyChapterOrder(items))
   ipcMain.handle('chapters:delete', (_e, id: number) => deleteChapter(id))
+
+  // Volumes
+  ipcMain.handle('volumes:list', (_e, bookId: number) => listVolumes(bookId))
+  ipcMain.handle('volumes:create', (_e, bookId: number, title?: string) =>
+    createVolume(bookId, title)
+  )
+  ipcMain.handle('volumes:rename', (_e, id: number, title: string) => renameVolume(id, title))
+  ipcMain.handle('volumes:delete', (_e, id: number) => deleteVolume(id))
+  ipcMain.handle('volumes:reorder', (_e, orderedIds: number[]) => reorderVolumes(orderedIds))
 }
