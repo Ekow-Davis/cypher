@@ -74,6 +74,24 @@ async function commitVolumeRename(): Promise<void> {
 function toggleCollapse(id: number): void {
   collapsed[id] = !collapsed[id]
 }
+
+// ----- volume deletion (optional chapter deletion) -----
+const volumeToDelete = ref<Volume | null>(null)
+const deleteChaptersToo = ref(false)
+
+function chapterCountFor(volumeId: number): number {
+  return store.chapters.filter((c) => c.volume_id === volumeId).length
+}
+function askDeleteVolume(v: Volume): void {
+  volumeToDelete.value = v
+  deleteChaptersToo.value = false
+}
+async function confirmDeleteVolume(): Promise<void> {
+  if (volumeToDelete.value) {
+    await store.deleteVolume(volumeToDelete.value.id, deleteChaptersToo.value)
+  }
+  volumeToDelete.value = null
+}
 </script>
 
 <template>
@@ -152,7 +170,7 @@ function toggleCollapse(id: number): void {
             <button
               class="rounded p-0.5 hover:text-red-400"
               title="Delete volume"
-              @click="store.deleteVolume(g.volume.id)"
+              @click="askDeleteVolume(g.volume)"
             >
               <Trash2 :size="13" />
             </button>
@@ -244,6 +262,45 @@ function toggleCollapse(id: number): void {
             </button>
           </div>
         </VueDraggable>
+      </div>
+    </div>
+
+    <!-- delete-volume confirmation -->
+    <div
+      v-if="volumeToDelete"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      @click.self="volumeToDelete = null"
+    >
+      <div class="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-xl">
+        <h2 class="mb-2 text-lg font-bold">Delete volume</h2>
+        <p class="mb-4 text-sm text-ink-dim">
+          Delete <span class="font-semibold text-ink">{{ volumeToDelete.title }}</span>? Its
+          chapters move to Unsorted unless you choose otherwise.
+        </p>
+        <label class="mb-5 flex items-center gap-2 text-sm">
+          <input
+            v-model="deleteChaptersToo"
+            type="checkbox"
+            class="h-4 w-4"
+            style="accent-color: var(--color-accent)"
+          />
+          <span>Also delete the {{ chapterCountFor(volumeToDelete.id) }} chapter(s) in this volume</span>
+        </label>
+        <div class="flex justify-end gap-2">
+          <button
+            class="rounded-xl px-4 py-2 text-sm font-medium text-ink-dim hover:text-ink"
+            @click="volumeToDelete = null"
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-xl px-4 py-2 text-sm font-semibold"
+            :class="deleteChaptersToo ? 'bg-red-500 text-white' : 'bg-accent text-on-accent'"
+            @click="confirmDeleteVolume"
+          >
+            Delete
+          </button>
+        </div>
       </div>
     </div>
   </aside>

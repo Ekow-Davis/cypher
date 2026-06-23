@@ -6,7 +6,9 @@ import type {
   Chapter,
   CreateChapterOptions,
   ChapterPlacement,
-  Volume
+  Volume,
+  Goal,
+  Checkin
 } from '@shared/types'
 
 const cypher = {
@@ -60,9 +62,45 @@ const cypher = {
       ipcRenderer.invoke('volumes:create', bookId, title),
     rename: (id: number, title: string): Promise<Volume | null> =>
       ipcRenderer.invoke('volumes:rename', id, title),
-    remove: (id: number): Promise<void> => ipcRenderer.invoke('volumes:delete', id),
+    remove: (id: number, deleteChapters?: boolean): Promise<void> =>
+      ipcRenderer.invoke('volumes:delete', id, deleteChapters),
     reorder: (orderedIds: number[]): Promise<void> =>
       ipcRenderer.invoke('volumes:reorder', orderedIds)
+  },
+
+  goals: {
+    get: (ownerType: string, ownerId: number): Promise<Goal | null> =>
+      ipcRenderer.invoke('goals:get', ownerType, ownerId),
+    upsert: (
+      ownerType: string,
+      ownerId: number,
+      targetWords: number,
+      deadline?: string | null,
+      writingDays?: number[]
+    ): Promise<Goal> =>
+      ipcRenderer.invoke('goals:upsert', ownerType, ownerId, targetWords, deadline, writingDays),
+    remove: (ownerType: string, ownerId: number): Promise<void> =>
+      ipcRenderer.invoke('goals:delete', ownerType, ownerId)
+  },
+
+  checkins: {
+    list: (ownerType: string, ownerId: number, since?: string): Promise<Checkin[]> =>
+      ipcRenderer.invoke('checkins:list', ownerType, ownerId, since),
+    snapshot: (
+      ownerType: string,
+      ownerId: number,
+      date: string,
+      totalWords: number
+    ): Promise<Checkin> =>
+      ipcRenderer.invoke('checkins:snapshot', ownerType, ownerId, date, totalWords),
+    setMood: (
+      ownerType: string,
+      ownerId: number,
+      date: string,
+      mood: string | null,
+      note: string | null
+    ): Promise<Checkin> =>
+      ipcRenderer.invoke('checkins:setMood', ownerType, ownerId, date, mood, note)
   }
 }
 

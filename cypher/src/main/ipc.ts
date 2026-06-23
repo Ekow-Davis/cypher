@@ -26,6 +26,12 @@ import {
   deleteVolume,
   reorderVolumes
 } from './db/repositories/volumes'
+import { getGoal, upsertGoal, deleteGoal } from './db/repositories/goals'
+import {
+  listCheckins,
+  snapshotProgress,
+  setMood
+} from './db/repositories/checkins'
 import { importCover } from './assets'
 import type { CreateBookInput, UpdateBookInput, CreateChapterOptions, ChapterPlacement } from '@shared/types'
 
@@ -69,6 +75,48 @@ export function registerIpcHandlers(): void {
     createVolume(bookId, title)
   )
   ipcMain.handle('volumes:rename', (_e, id: number, title: string) => renameVolume(id, title))
-  ipcMain.handle('volumes:delete', (_e, id: number) => deleteVolume(id))
+  ipcMain.handle('volumes:delete', (_e, id: number, deleteChapters?: boolean) =>
+    deleteVolume(id, !!deleteChapters)
+  )
   ipcMain.handle('volumes:reorder', (_e, orderedIds: number[]) => reorderVolumes(orderedIds))
+
+  // Goals
+  ipcMain.handle('goals:get', (_e, ownerType: string, ownerId: number) =>
+    getGoal(ownerType, ownerId)
+  )
+  ipcMain.handle(
+    'goals:upsert',
+    (
+      _e,
+      ownerType: string,
+      ownerId: number,
+      targetWords: number,
+      deadline?: string | null,
+      writingDays?: number[]
+    ) => upsertGoal(ownerType, ownerId, targetWords, deadline ?? null, writingDays ?? [])
+  )
+  ipcMain.handle('goals:delete', (_e, ownerType: string, ownerId: number) =>
+    deleteGoal(ownerType, ownerId)
+  )
+
+  // Check-ins (daily progress + mood)
+  ipcMain.handle('checkins:list', (_e, ownerType: string, ownerId: number, since?: string) =>
+    listCheckins(ownerType, ownerId, since)
+  )
+  ipcMain.handle(
+    'checkins:snapshot',
+    (_e, ownerType: string, ownerId: number, date: string, totalWords: number) =>
+      snapshotProgress(ownerType, ownerId, date, totalWords)
+  )
+  ipcMain.handle(
+    'checkins:setMood',
+    (
+      _e,
+      ownerType: string,
+      ownerId: number,
+      date: string,
+      mood?: string | null,
+      note?: string | null
+    ) => setMood(ownerType, ownerId, date, mood ?? null, note ?? null)
+  )
 }

@@ -148,3 +148,18 @@ export function migration001(db: Database): void {
     );
   `)
 }
+
+/**
+ * Migration 002 — daily progress tracking.
+ * Adds a per-day total-words snapshot to checkins (so we can derive words
+ * written each day), plus a uniqueness guarantee on (owner, date) that lets
+ * the progress + mood writers upsert a single row per day.
+ */
+export function migration002(db: Database): void {
+  db.exec(`
+    ALTER TABLE checkins ADD COLUMN total_words INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE checkins ADD COLUMN day_start_words INTEGER; -- baseline at first snapshot of the day
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_checkins_owner_date
+      ON checkins(owner_type, owner_id, date);
+  `)
+}

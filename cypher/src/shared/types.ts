@@ -56,3 +56,24 @@ export interface CreateChapterOptions {
   title?: string
   volumeId?: number | null
 }
+
+export interface Goal {
+  id: number
+  owner_type: string
+  owner_id: number
+  target_words: number
+  deadline: string | null
+  writing_days: string // JSON array of weekday indices
+}
+
+export interface Checkin {
+  id: number
+  owner_type: string
+  owner_id: number
+  date: string // YYYY-MM-DD (local)
+  mood: string | null
+  note: string | null
+  words_written: number
+  total_words: number
+  day_start_words: number | null
+}

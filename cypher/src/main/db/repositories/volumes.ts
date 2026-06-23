@@ -35,9 +35,19 @@ export function renameVolume(id: number, title: string): Volume | null {
   return getVolume(id)
 }
 
-// Chapters in a deleted volume fall back to "unsorted" via ON DELETE SET NULL.
-export function deleteVolume(id: number): void {
-  getDb().prepare('DELETE FROM volumes WHERE id = ?').run(id)
+// By default, chapters in a deleted volume fall back to "unsorted" via
+// ON DELETE SET NULL. If deleteChapters is true, they are removed too.
+export function deleteVolume(id: number, deleteChapters = false): void {
+  const db = getDb()
+  if (deleteChapters) {
+    const tx = db.transaction(() => {
+      db.prepare('DELETE FROM chapters WHERE volume_id = ?').run(id)
+      db.prepare('DELETE FROM volumes WHERE id = ?').run(id)
+    })
+    tx()
+  } else {
+    db.prepare('DELETE FROM volumes WHERE id = ?').run(id)
+  }
 }
 
 export function reorderVolumes(orderedIds: number[]): void {

@@ -83,13 +83,20 @@ export const useChaptersStore = defineStore('chapters', () => {
     }
   }
 
-  async function deleteVolume(id: number): Promise<void> {
-    await window.cypher.volumes.remove(id)
+  async function deleteVolume(id: number, deleteChapters = false): Promise<void> {
+    await window.cypher.volumes.remove(id, deleteChapters)
     volumes.value = volumes.value.filter((v) => v.id !== id)
-    // chapters in that volume become unsorted
-    chapters.value.forEach((c) => {
-      if (c.volume_id === id) c.volume_id = null
-    })
+    if (deleteChapters) {
+      const removedActive = chapters.value.some(
+        (c) => c.volume_id === id && c.id === activeId.value
+      )
+      chapters.value = chapters.value.filter((c) => c.volume_id !== id)
+      if (removedActive) activeId.value = chapters.value[0]?.id ?? null
+    } else {
+      chapters.value.forEach((c) => {
+        if (c.volume_id === id) c.volume_id = null
+      })
+    }
   }
 
   async function moveVolume(id: number, direction: -1 | 1): Promise<void> {

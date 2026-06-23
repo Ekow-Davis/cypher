@@ -1,24 +1,28 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Settings2 } from 'lucide-vue-next'
+import { ArrowLeft, Settings2, PanelRight } from 'lucide-vue-next'
 import { useBooksStore } from '@/stores/books'
 import { useChaptersStore } from '@/stores/chapters'
+import { useInsightsStore } from '@/stores/insights'
 import ChapterList from './ChapterList.vue'
 import ChapterEditor from './ChapterEditor.vue'
+import InsightsSidebar from './InsightsSidebar.vue'
 import type { Book } from '@shared/types'
 
 const route = useRoute()
 const router = useRouter()
 const booksStore = useBooksStore()
 const chapters = useChaptersStore()
+const insights = useInsightsStore()
 
 const book = ref<Book | null>(null)
+const showInsights = ref(true)
 
 onMounted(async () => {
   const id = Number(route.params.id)
   book.value = await booksStore.get(id)
-  await chapters.loadForBook(id)
+  await Promise.all([chapters.loadForBook(id), insights.loadForBook(id)])
 })
 </script>
 
@@ -32,8 +36,17 @@ onMounted(async () => {
         <ArrowLeft :size="18" /> Shelf
       </button>
       <h1 class="ml-2 truncate text-lg font-semibold">{{ book?.title ?? 'Loading…' }}</h1>
+
       <button
-        class="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-ink-dim transition-colors hover:text-ink"
+        class="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors"
+        :class="showInsights ? 'text-accent' : 'text-ink-dim hover:text-ink'"
+        title="Toggle Goals & Insights"
+        @click="showInsights = !showInsights"
+      >
+        <PanelRight :size="16" /> Insights
+      </button>
+      <button
+        class="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-ink-dim transition-colors hover:text-ink"
         @click="router.push(`/book/${route.params.id}/settings`)"
       >
         <Settings2 :size="16" /> Settings
@@ -48,6 +61,7 @@ onMounted(async () => {
           No chapter selected.
         </div>
       </main>
+      <InsightsSidebar v-if="showInsights" />
     </div>
   </div>
 </template>

@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3'
-import { migration001 } from './schema'
+import { migration001, migration002 } from './schema'
 
 interface Migration {
   version: number
@@ -11,7 +11,10 @@ interface Migration {
  * with the next version number and its `up` function. Each runs once, in order,
  * inside a transaction, and the database's user_version is bumped to match.
  */
-const MIGRATIONS: Migration[] = [{ version: 1, up: migration001 }]
+const MIGRATIONS: Migration[] = [
+  { version: 1, up: migration001 },
+  { version: 2, up: migration002 }
+]
 
 export function runMigrations(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number
