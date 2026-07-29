@@ -85,6 +85,35 @@ export const useChaptersStore = defineStore('chapters', () => {
     if (existing) Object.assign(existing, updated)
   }
 
+  /**
+   * Re-reads this book from the database after another window changed it.
+   * Existing objects are updated in place so the sidebar's grouped arrays stay
+   * valid, and the chapter open in THIS window keeps its local text — the
+   * editor here is the live copy, and overwriting it would discard typing.
+   */
+  async function refresh(): Promise<void> {
+    if (bookId.value == null) return
+    const [vols, fresh] = await Promise.all([
+      window.cypher.volumes.list(bookId.value),
+      window.cypher.chapters.list(bookId.value)
+    ])
+    volumes.value = vols
+    const byId = new Map(chapters.value.map((c) => [c.id, c]))
+    chapters.value = fresh.map((incoming) => {
+      const existing = byId.get(incoming.id)
+      if (!existing) return incoming
+      const patch =
+        existing.id === activeId.value
+          ? { ...incoming, content: existing.content, word_count: existing.word_count }
+          : incoming
+      Object.assign(existing, patch)
+      return existing
+    })
+    if (activeId.value != null && !chapters.value.some((c) => c.id === activeId.value)) {
+      activeId.value = chapters.value[0]?.id ?? null
+    }
+  }
+
   // ----- volumes -----
   async function addVolume(): Promise<void> {
     if (bookId.value == null) return
@@ -133,6 +162,7 @@ export const useChaptersStore = defineStore('chapters', () => {
     active,
     bookId,
     loadForBook,
+    refresh,
     add,
     rename,
     saveContent,

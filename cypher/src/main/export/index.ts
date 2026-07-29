@@ -29,9 +29,11 @@ export async function exportBook(
   format: ExportFormat,
   options: ExportOptions
 ): Promise<ExportResult> {
-  const data = gatherBook(bookId)
+  const data = gatherBook(bookId, options.chapterIds)
   if (!data) return { path: null, chapters: 0, error: 'Book not found.' }
-  if (!data.chapters.length) return { path: null, chapters: 0, error: 'This book has no chapters.' }
+  if (!data.chapters.length) {
+    return { path: null, chapters: 0, error: 'No chapters selected to export.' }
+  }
 
   const result = await dialog.showSaveDialog({
     title: `Export as ${format.toUpperCase()}`,

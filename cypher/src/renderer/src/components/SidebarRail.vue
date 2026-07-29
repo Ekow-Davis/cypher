@@ -3,9 +3,11 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { NotebookPen, FileText, BookOpen, BookMarked, Settings, Sun, Moon } from 'lucide-vue-next'
 import { useAppStore } from '@/stores/app'
+import { useBreakpoint } from '@/lib/useBreakpoint'
 import { useThemeStore } from '@/stores/theme'
 
 const appStore = useAppStore()
+const { isTight } = useBreakpoint()
 const theme = useThemeStore()
 
 const items = [
@@ -22,7 +24,7 @@ const toggleLabel = computed(() => (isDark.value ? 'Light' : 'Dark'))
 
 <template>
   <aside
-    class="flex w-20 shrink-0 flex-col items-center gap-2 border-r border-border bg-surface py-4"
+    :class="['flex shrink-0 flex-col items-center gap-2 border-r border-border bg-surface py-4', isTight ? 'w-14' : 'w-20']"
   >
     <div class="mb-4 select-none text-lg font-bold tracking-widest text-accent">CY</div>
 
@@ -30,34 +32,34 @@ const toggleLabel = computed(() => (isDark.value ? 'Light' : 'Dark'))
       v-for="item in items"
       :key="item.to"
       :to="item.to"
-      class="group flex w-16 flex-col items-center gap-1 rounded-xl py-3 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+      :class="['group flex flex-col items-center gap-1 rounded-xl py-3 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink', isTight ? 'w-11' : 'w-16']"
       active-class="bg-surface-2 text-accent"
     >
       <component :is="item.icon" :size="22" />
-      <span class="text-[10px] font-medium">{{ item.label }}</span>
+      <span v-if="!isTight" class="text-[10px] font-medium">{{ item.label }}</span>
     </RouterLink>
 
     <!-- bottom cluster -->
     <div class="mt-auto flex flex-col items-center gap-1">
       <button
-        class="flex w-16 flex-col items-center gap-1 rounded-xl py-3 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+        :class="['flex flex-col items-center gap-1 rounded-xl py-3 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink', isTight ? 'w-11' : 'w-16']"
         :title="`Switch to ${toggleLabel.toLowerCase()} mode`"
         @click="theme.toggleMode()"
       >
         <component :is="isDark ? Sun : Moon" :size="22" />
-        <span class="text-[10px] font-medium">{{ toggleLabel }}</span>
+        <span v-if="!isTight" class="text-[10px] font-medium">{{ toggleLabel }}</span>
       </button>
 
       <RouterLink
         to="/settings"
-        class="flex w-16 flex-col items-center gap-1 rounded-xl py-3 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+        :class="['flex flex-col items-center gap-1 rounded-xl py-3 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink', isTight ? 'w-11' : 'w-16']"
         active-class="bg-surface-2 text-accent"
       >
         <Settings :size="22" />
-        <span class="text-[10px] font-medium">Settings</span>
+        <span v-if="!isTight" class="text-[10px] font-medium">Settings</span>
       </RouterLink>
 
-      <div class="select-none pt-1 text-[9px] text-ink-dim">v{{ appStore.version || '0.1.0' }}</div>
+      <div v-if="!isTight" class="select-none pt-1 text-[9px] text-ink-dim">v{{ appStore.version || '0.1.0' }}</div>
     </div>
   </aside>
 </template>

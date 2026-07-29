@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, ImagePlus, Copy, Check, BookOpen, Info, X } from 'lucide-vue-next'
+import { ArrowLeft, ImagePlus, Copy, Check, BookOpen, Info, X, ExternalLink } from 'lucide-vue-next'
 import { useReaderStore } from '@/stores/reader'
+import { useBreakpoint } from '@/lib/useBreakpoint'
 import { assetUrl } from '@/lib/assets'
 import EpubReader from './EpubReader.vue'
 import type { ReaderItem } from '@shared/types'
@@ -10,12 +11,18 @@ import type { ReaderItem } from '@shared/types'
 const route = useRoute()
 const router = useRouter()
 const store = useReaderStore()
+const { isTight } = useBreakpoint()
 
 const id = Number(route.params.id)
 const title = ref('')
 const author = ref('')
 const copied = ref(false)
 const showDetails = ref(false)
+
+/** Read alongside writing: this book in its own window. */
+function openInNewWindow(): void {
+  void window.cypher.windows.open(`/reader/${id}`)
+}
 
 const item = computed<ReaderItem | null>(() => store.getById(id))
 
@@ -61,7 +68,15 @@ async function copyPath(): Promise<void> {
       <h1 class="ml-2 truncate text-lg font-semibold">{{ item?.title ?? 'Not found' }}</h1>
       <button
         v-if="item"
-        class="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors"
+        class="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-ink-dim transition-colors hover:text-ink"
+        title="Open in a new window"
+        @click="openInNewWindow"
+      >
+        <ExternalLink :size="16" />
+      </button>
+      <button
+        v-if="item"
+        class="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors"
         :class="showDetails ? 'text-accent' : 'text-ink-dim hover:text-ink'"
         title="Book details"
         @click="showDetails = !showDetails"
@@ -74,9 +89,9 @@ async function copyPath(): Promise<void> {
       This book is no longer in your library.
     </div>
 
-    <div v-else class="flex flex-1 overflow-hidden">
+    <div v-else class="relative flex flex-1 overflow-hidden">
       <!-- reading surface -->
-      <div class="flex-1 overflow-hidden">
+      <div class="min-w-0 flex-1 overflow-hidden">
         <EpubReader v-if="item.format === 'epub'" :key="item.id" :item="item" />
         <div v-else class="flex h-full items-center justify-center p-6 text-center">
           <div class="max-w-sm text-ink-dim">
@@ -94,6 +109,7 @@ async function copyPath(): Promise<void> {
       <aside
         v-if="showDetails"
         class="w-72 shrink-0 space-y-4 overflow-auto border-l border-border bg-surface p-4"
+        :class="isTight ? 'absolute inset-y-0 right-0 z-30 shadow-2xl' : ''"
       >
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold uppercase tracking-wider text-ink-dim">Details</span>

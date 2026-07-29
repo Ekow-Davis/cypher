@@ -161,7 +161,7 @@ async function confirmNewFolder(): Promise<void> {
       </aside>
 
       <!-- sheet -->
-      <main class="flex-1 overflow-hidden">
+      <main class="min-w-0 flex-1 overflow-hidden">
         <CharacterSheet v-if="store.active" :character="store.active" />
         <div v-else class="flex h-full items-center justify-center text-ink-dim">
           Select or create a character.

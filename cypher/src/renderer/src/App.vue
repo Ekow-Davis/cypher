@@ -6,6 +6,7 @@ import { ShieldAlert, X } from 'lucide-vue-next'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 import { usePreferencesStore } from '@/stores/preferences'
+import { installSync } from '@/lib/sync'
 
 const route = useRoute()
 const appStore = useAppStore()
@@ -36,6 +37,7 @@ function snooze(): void {
 }
 
 onMounted(async () => {
+  installSync()
   void theme.load()
   void prefs.load()
   void appStore.init()

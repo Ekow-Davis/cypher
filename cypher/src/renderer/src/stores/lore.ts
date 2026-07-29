@@ -33,7 +33,16 @@ export const useLoreStore = defineStore('lore', () => {
       return await fn()
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      lastError.value = `${label} failed: ${msg}`
+      let hint = ''
+      if (
+        /no such column|no such table|No handler registered|Cannot read propert.*undefined|is not a function/i.test(
+          msg
+        )
+      ) {
+        hint =
+          ' — the main process is a version behind (stale preload or unrun migration). Fully stop the dev server (Ctrl+C) and run "npm run dev" again — a page reload is not enough.'
+      }
+      lastError.value = `${label} failed: ${msg}${hint}`
       console.error('[lore]', label, e)
       return undefined
     }
@@ -51,6 +60,25 @@ export const useLoreStore = defineStore('lore', () => {
     loaded.value = true
   }
 
+  /** Re-reads the codex after an external change, preserving the open entry. */
+  async function refresh(): Promise<void> {
+    if (bookId.value == null) return
+    const fresh = await guard('Load lore', () => window.cypher.lore.list(bookId.value!))
+    if (!fresh) return
+    const byId = new Map(entries.value.map((e) => [e.id, e]))
+    entries.value = fresh.map((incoming) => {
+      const existing = byId.get(incoming.id)
+      if (!existing) return incoming
+      const patch =
+        existing.id === activeId.value ? { ...incoming, content: existing.content } : incoming
+      Object.assign(existing, patch)
+      return existing
+    })
+    if (activeId.value != null && !entries.value.some((e) => e.id === activeId.value)) {
+      activeId.value = entries.value[0]?.id ?? null
+    }
+  }
+
   async function add(category = 'General'): Promise<void> {
     if (bookId.value == null) {
       lastError.value = 'No book loaded yet — reopen the book and try again.'
@@ -59,10 +87,11 @@ export const useLoreStore = defineStore('lore', () => {
     const entry = await guard('Create entry', () =>
       window.cypher.lore.create(bookId.value!, { category })
     )
-    if (entry) {
-      entries.value.push(entry)
-      activeId.value = entry.id
-    }
+    if (!entry) return
+    // Re-sync the list from the database so the new row shows regardless of local state.
+    const fresh = await guard('Load lore', () => window.cypher.lore.list(bookId.value!))
+    if (fresh) entries.value = fresh
+    activeId.value = entry.id
   }
 
   async function rename(id: number, title: string): Promise<void> {
@@ -112,6 +141,7 @@ export const useLoreStore = defineStore('lore', () => {
     groups,
     categoryNames,
     loadForBook,
+    refresh,
     add,
     rename,
     setCategory,

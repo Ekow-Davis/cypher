@@ -10,6 +10,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const autosaveMs = ref(600)
   const spellcheck = ref(true)
   const focusWidth = ref<FocusWidth>('medium')
+  const defaultAuthor = ref('')
   const loaded = ref(false)
 
   async function load(): Promise<void> {
@@ -19,6 +20,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
         if (typeof raw.autosaveMs === 'number') autosaveMs.value = raw.autosaveMs
         if (typeof raw.spellcheck === 'boolean') spellcheck.value = raw.spellcheck
         if (raw.focusWidth) focusWidth.value = raw.focusWidth as FocusWidth
+        if (typeof raw.defaultAuthor === 'string') defaultAuthor.value = raw.defaultAuthor
       }
     } catch {
       /* first run */
@@ -31,7 +33,8 @@ export const usePreferencesStore = defineStore('preferences', () => {
       await window.cypher.settings.set(KEY, {
         autosaveMs: autosaveMs.value,
         spellcheck: spellcheck.value,
-        focusWidth: focusWidth.value
+        focusWidth: focusWidth.value,
+        defaultAuthor: defaultAuthor.value
       })
     } catch {
       /* non-fatal */
@@ -46,10 +49,25 @@ export const usePreferencesStore = defineStore('preferences', () => {
     spellcheck.value = on
     void persist()
   }
+  function setDefaultAuthor(name: string): void {
+    defaultAuthor.value = name
+    void persist()
+  }
   function setFocusWidth(w: FocusWidth): void {
     focusWidth.value = w
     void persist()
   }
 
-  return { autosaveMs, spellcheck, focusWidth, loaded, load, setAutosave, setSpellcheck, setFocusWidth }
+  return {
+    autosaveMs,
+    spellcheck,
+    focusWidth,
+    defaultAuthor,
+    loaded,
+    load,
+    setAutosave,
+    setSpellcheck,
+    setFocusWidth,
+    setDefaultAuthor
+  }
 })

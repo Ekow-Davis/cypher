@@ -1,49 +1,13 @@
-import { app, shell, BrowserWindow } from 'electron'
-import { join } from 'node:path'
+import { app, BrowserWindow } from 'electron'
 import { registerIpcHandlers } from './ipc'
 import { initDatabase, closeDatabase } from './db'
 import { startBackupScheduler, stopBackupScheduler } from './backup'
 import { purgeExpiredTrash } from './db/repositories/trash'
 import { registerAssetSchemePrivileged, registerAssetProtocol } from './assets'
-
-const isDev = !!process.env['ELECTRON_RENDERER_URL']
+import { createWindow } from './windows'
 
 // Privileged schemes must be declared before the app is ready.
 registerAssetSchemePrivileged()
-
-function createMainWindow(): BrowserWindow {
-  const window = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 940,
-    minHeight: 600,
-    show: false,
-    autoHideMenuBar: true,
-    backgroundColor: '#15121d',
-    title: 'Cypher',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  })
-
-  window.on('ready-to-show', () => window.show())
-
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
-
-  if (isDev) {
-    window.loadURL(process.env['ELECTRON_RENDERER_URL'] as string)
-  } else {
-    window.loadFile(join(__dirname, '../renderer/index.html'))
-  }
-
-  return window
-}
 
 app.whenReady().then(() => {
   initDatabase()
@@ -56,10 +20,10 @@ app.whenReady().then(() => {
   } catch (e) {
     console.error('[trash] purge failed:', e)
   }
-  createMainWindow()
+  createWindow('/')
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
+    if (BrowserWindow.getAllWindows().length === 0) createWindow('/')
   })
 })
 

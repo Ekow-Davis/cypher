@@ -2,6 +2,7 @@ import { createWriteStream } from 'node:fs'
 import archiver from 'archiver'
 import { randomUUID } from 'node:crypto'
 import { contentToHtml, escapeHtml } from './tiptapToHtml'
+import { loadCover } from './cover'
 import type { ExportBook } from './gather'
 import type { ExportOptions } from './types'
 
@@ -36,6 +37,7 @@ export async function exportEpub(
   destination: string
 ): Promise<void> {
   const uuid = randomUUID()
+  const cover = options.includeCover ? loadCover(data.book.cover_path) : null
   const items: Item[] = []
   let n = 0
 
@@ -69,21 +71,39 @@ export async function exportEpub(
     .join('\n    ')
   const spine = items.map((i) => `<itemref idref="${i.id}"/>`).join('\n    ')
 
+  const coverManifest = cover
+    ? `<item id="cover-image" href="cover${cover.ext}" media-type="${cover.mime}" properties="cover-image"/>
+    <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>`
+    : ''
+  // EPUB 2 readers look for this meta; EPUB 3 uses properties="cover-image".
+  const coverMeta = cover ? `<meta name="cover" content="cover-image"/>` : ''
+  const coverSpine = cover ? `<itemref idref="cover" linear="yes"/>` : ''
+  const coverDoc = cover
+    ? `<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><meta charset="utf-8"/><title>Cover</title>
+<style>body{margin:0;text-align:center}img{max-width:100%;height:auto}</style></head>
+<body><img src="cover${cover.ext}" alt="Cover"/></body></html>`
+    : ''
+
   const opf = `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
     <dc:identifier id="bookid">urn:uuid:${uuid}</dc:identifier>
     <dc:title>${escapeHtml(data.book.title)}</dc:title>
     <dc:language>en</dc:language>
+    ${options.author.trim() ? `<dc:creator>${escapeHtml(options.author.trim())}</dc:creator>` : ''}
     <meta property="dcterms:modified">${new Date().toISOString().replace(/\.\d+Z$/, 'Z')}</meta>
+    ${coverMeta}
   </metadata>
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="css" href="style.css" media-type="text/css"/>
+    ${coverManifest}
     ${manifest}
   </manifest>
-  <spine toc="ncx">
+  <spine toc="ncx" page-progression-direction="ltr">
+    ${coverSpine}
     ${spine}
   </spine>
 </package>`
@@ -91,9 +111,14 @@ export async function exportEpub(
   const nav = `<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
 <head><meta charset="utf-8"/><title>Contents</title></head>
-<body><nav epub:type="toc" id="toc"><h1>Contents</h1><ol>
+<body>
+<nav epub:type="toc" id="toc"><h1>Contents</h1><ol>
 ${items.map((i) => `<li><a href="${i.file}">${escapeHtml(i.title)}</a></li>`).join('\n')}
-</ol></nav></body></html>`
+</ol></nav>
+<nav epub:type="landmarks" id="landmarks" hidden="hidden"><ol>
+<li><a epub:type="bodymatter" href="${items[0]?.file ?? 'nav.xhtml'}">Start of content</a></li>
+</ol></nav>
+</body></html>`
 
   const ncx = `<?xml version="1.0" encoding="utf-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
@@ -132,6 +157,10 @@ ${items
     zip.append(nav, { name: 'OEBPS/nav.xhtml' })
     zip.append(ncx, { name: 'OEBPS/toc.ncx' })
     zip.append(CSS, { name: 'OEBPS/style.css' })
+    if (cover) {
+      zip.append(cover.buffer, { name: `OEBPS/cover${cover.ext}` })
+      zip.append(coverDoc, { name: 'OEBPS/cover.xhtml' })
+    }
     for (const i of items) zip.append(i.html, { name: `OEBPS/${i.file}` })
     void zip.finalize()
   })

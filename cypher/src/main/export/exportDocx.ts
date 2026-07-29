@@ -4,10 +4,12 @@ import {
   Packer,
   Paragraph,
   TextRun,
+  ImageRun,
   HeadingLevel,
   AlignmentType,
   PageBreak
 } from 'docx'
+import { loadCover, fitBox } from './cover'
 import { contentToBlocks, type Block } from './tiptapToHtml'
 import type { ExportBook } from './gather'
 import type { ExportOptions } from './types'
@@ -60,6 +62,27 @@ export async function exportDocx(
 ): Promise<void> {
   const children: Paragraph[] = []
 
+  // Cover art becomes the opening page, sized to the printable area.
+  if (options.includeCover) {
+    const cover = loadCover(data.book.cover_path)
+    if (cover) {
+      const { width, height } = fitBox(cover, 460, 620)
+      children.push(
+        new Paragraph({
+          children: [
+            new ImageRun({
+              type: cover.ext === '.png' ? 'png' : cover.ext === '.gif' ? 'gif' : 'jpg',
+              data: cover.buffer,
+              transformation: { width, height }
+            })
+          ],
+          alignment: AlignmentType.CENTER
+        })
+      )
+      children.push(new Paragraph({ children: [new PageBreak()] }))
+    }
+  }
+
   if (options.titlePage) {
     children.push(
       new Paragraph({
@@ -73,6 +96,15 @@ export async function exportDocx(
         new Paragraph({
           children: [new TextRun({ text: data.book.subtitle, size: 28 })],
           alignment: AlignmentType.CENTER
+        })
+      )
+    }
+    if (options.author.trim()) {
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: options.author.trim(), size: 26 })],
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 480 }
         })
       )
     }

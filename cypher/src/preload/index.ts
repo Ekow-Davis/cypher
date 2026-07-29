@@ -27,6 +27,17 @@ import type {
 } from '@shared/types'
 
 const cypher = {
+  windows: {
+    open: (route: string): Promise<{ ok: boolean; reason?: string; count: number }> =>
+      ipcRenderer.invoke('window:open', route),
+    count: (): Promise<number> => ipcRenderer.invoke('window:count')
+  },
+
+  /** Fires when another window changes a slice of data. */
+  onDataChanged: (callback: (scope: string) => void): void => {
+    ipcRenderer.on('data:changed', (_event, scope: string) => callback(scope))
+  },
+
   ping: (): Promise<string> => ipcRenderer.invoke('app:ping'),
   getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
 

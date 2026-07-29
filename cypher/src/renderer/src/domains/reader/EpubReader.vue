@@ -16,6 +16,15 @@ let rendition: any = null
 
 const loading = ref(true)
 const errorMsg = ref<string | null>(null)
+const degraded = ref(false)
+let degradedTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Announce the fallback, then get out of the way. */
+function flagDegraded(): void {
+  degraded.value = true
+  if (degradedTimer) clearTimeout(degradedTimer)
+  degradedTimer = setTimeout(() => (degraded.value = false), 5000)
+}
 const toc = ref<any[]>([])
 const showToc = ref(false)
 const showSettings = ref(false)
@@ -147,6 +156,50 @@ function bindRendition(): void {
   rendition.on('keyup', onKey)
 }
 
+/**
+ * epub.js's continuous manager keeps loading sections until the viewport is
+ * full. On a short book there aren't enough sections to fill it, and it can
+ * spin without ever resolving — so every display is raced against a timeout
+ * and we fall back to the simpler one-section-at-a-time manager.
+ */
+async function displayOrTimeout(target: string | undefined, ms = 6000): Promise<boolean> {
+  try {
+    await Promise.race([
+      rendition.display(target),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('display timeout')), ms))
+    ])
+    return true
+  } catch (e) {
+    console.warn('[reader] display did not settle:', e)
+    return false
+  }
+}
+
+async function loadToc(): Promise<void> {
+  try {
+    const nav = (await Promise.race([
+      book.loaded.navigation,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('navigation timeout')), 8000))
+    ])) as { toc?: any[] }
+    if (nav?.toc?.length) {
+      toc.value = nav.toc
+      return
+    }
+  } catch (e) {
+    console.warn('[reader] navigation unavailable, falling back to spine:', e)
+  }
+  // Fallback: list the spine so chapter jumping still works.
+  try {
+    const spine = (book.spine?.spineItems ?? []) as { href: string; idref?: string }[]
+    toc.value = spine.map((item, i) => ({
+      href: item.href,
+      label: item.idref || `Section ${i + 1}`
+    }))
+  } catch {
+    toc.value = []
+  }
+}
+
 async function render(): Promise<void> {
   loading.value = true
   errorMsg.value = null
@@ -160,13 +213,32 @@ async function render(): Promise<void> {
     await nextTick()
     rendition = book.renderTo(viewer.value as HTMLElement, renditionOptions())
     applyStyles()
-    await rendition.display(props.item.last_location || undefined)
+    const ok = await displayOrTimeout(props.item.last_location || undefined)
+    if (!ok && flow.value === 'scrolled') {
+      // Rebuild without the continuous manager, which is what stalls.
+      try {
+        rendition.destroy()
+      } catch {
+        /* ignore */
+      }
+      flagDegraded()
+      const { w, h } = measure()
+      rendition = book.renderTo(viewer.value as HTMLElement, {
+        width: w,
+        height: h,
+        flow: 'scrolled-doc'
+      })
+      applyStyles()
+      await displayOrTimeout(props.item.last_location || undefined, 6000)
+    }
     applyStyles()
     // a settle pass: fonts/images can change metrics after first paint
     scheduleResize()
 
-    const nav = await book.loaded.navigation
-    toc.value = nav.toc || []
+    // Deliberately not awaited: a book whose navigation is slow or malformed
+    // must not leave the reader stuck behind a spinner. Chapters arrive when
+    // they arrive, and there's a spine-derived fallback if they never do.
+    void loadToc()
 
     book.locations
       .generate(1000)
@@ -205,7 +277,7 @@ async function recreate(): Promise<void> {
   await nextTick()
   rendition = book.renderTo(viewer.value, renditionOptions())
   applyStyles()
-  await rendition.display(cfi || props.item.last_location || undefined)
+  await displayOrTimeout(cfi || props.item.last_location || undefined)
   applyStyles()
   bindRendition()
   scheduleResize()
@@ -266,8 +338,8 @@ watch(flow, () => {
   savePrefs()
   void recreate()
 })
-// panels change the available width -> re-measure
-watch([showToc, showSettings], () => scheduleResize())
+// Panels overlay the page rather than shrinking it, so opening one no longer
+// reflows the text mid-sentence — and needs no re-measure.
 
 onMounted(async () => {
   await loadPrefs()
@@ -279,6 +351,7 @@ onMounted(async () => {
   }
 })
 onBeforeUnmount(() => {
+  if (degradedTimer) clearTimeout(degradedTimer)
   window.removeEventListener('keydown', onKey)
   if (saveTimer) clearTimeout(saveTimer)
   if (resizeTimer) clearTimeout(resizeTimer)
@@ -320,9 +393,12 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div class="flex min-h-0 flex-1">
+    <div class="relative flex min-h-0 flex-1">
       <!-- TOC -->
-      <div v-if="showToc" class="w-64 shrink-0 overflow-auto border-r border-border bg-surface py-2">
+      <div
+        v-if="showToc"
+        class="absolute inset-y-0 left-0 z-30 w-64 overflow-auto border-r border-border bg-surface py-2 shadow-2xl"
+      >
         <div class="px-4 py-1 text-xs font-semibold uppercase tracking-wider text-ink-dim">Contents</div>
         <template v-for="(it, i) in toc" :key="i">
           <button
@@ -367,6 +443,13 @@ onBeforeUnmount(() => {
           <div ref="viewer" class="h-full w-full" :style="stageStyle"></div>
         </div>
 
+        <div
+          v-if="degraded && !loading"
+          class="absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full bg-surface/90 px-3 py-1 text-[11px] text-ink-dim shadow"
+        >
+          Simple scroll mode (this book is short)
+        </div>
+
         <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-surface/80 text-ink-dim">
           <Loader2 :size="24" class="animate-spin" />
         </div>
@@ -381,7 +464,7 @@ onBeforeUnmount(() => {
       <!-- settings -->
       <div
         v-if="showSettings"
-        class="w-64 shrink-0 space-y-5 overflow-auto border-l border-border bg-surface p-4"
+        class="absolute inset-y-0 right-0 z-30 w-64 space-y-5 overflow-auto border-l border-border bg-surface p-4 shadow-2xl"
       >
         <div>
           <div class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-dim">Layout</div>

@@ -78,6 +78,7 @@ import {
 } from './db/repositories/checkins'
 import { importCover, importCharacterImage, absoluteAssetPath } from './assets'
 import { exportBook } from './export'
+import { openWindow, windowCount, broadcastDataChanged } from './windows'
 import {
   listBackups,
   createBackup,
@@ -103,59 +104,92 @@ import type {
   ExportOptions
 } from '@shared/types'
 
+/**
+ * Channels that only read, or that concern app chrome rather than content.
+ * These never trigger a cross-window refresh.
+ */
+const NO_BROADCAST = /^(app|db|settings|window|export):/
+const MUTATION = /:(create|update|delete|rename|save[A-Za-z]*|set[A-Za-z]*|apply[A-Za-z]*|reorder|archive|import[A-Za-z]*|remove|snapshot|upsert|empty|purge|restore|ensure[A-Za-z]*)$/
+
+function shouldBroadcast(channel: string): boolean {
+  return !NO_BROADCAST.test(channel) && MUTATION.test(channel)
+}
+
+/**
+ * Registers a handler and, when it changed something, tells the other windows
+ * which slice of data to re-read. Deriving the scope from the channel prefix
+ * keeps this automatic — new channels join in without extra wiring.
+ */
+function handle(
+  channel: string,
+  fn: (event: Electron.IpcMainInvokeEvent, ...args: never[]) => unknown
+): void {
+  ipcMain.handle(channel, async (event, ...args) => {
+    const result = await (fn as (e: unknown, ...a: unknown[]) => unknown)(event, ...args)
+    if (shouldBroadcast(channel)) {
+      broadcastDataChanged(channel.split(':')[0], event.sender.id)
+    }
+    return result
+  })
+}
+
 export function registerIpcHandlers(): void {
+  // Windows
+  handle('window:open', (_e, route: string) => openWindow(route))
+  handle('window:count', () => windowCount())
+
   // App / diagnostics
-  ipcMain.handle('app:ping', () => 'pong')
-  ipcMain.handle('app:version', () => app.getVersion())
-  ipcMain.handle('db:info', () => getDatabaseInfo())
+  handle('app:ping', () => 'pong')
+  handle('app:version', () => app.getVersion())
+  handle('db:info', () => getDatabaseInfo())
 
   // Settings
-  ipcMain.handle('settings:get', (_e, key: string) => getSetting(key))
-  ipcMain.handle('settings:getAll', () => getAllSettings())
-  ipcMain.handle('settings:set', (_e, key: string, value: unknown) => setSetting(key, value))
+  handle('settings:get', (_e, key: string) => getSetting(key))
+  handle('settings:getAll', () => getAllSettings())
+  handle('settings:set', (_e, key: string, value: unknown) => setSetting(key, value))
 
   // Books
-  ipcMain.handle('books:list', (_e, includeArchived?: boolean) => listBooks(!!includeArchived))
-  ipcMain.handle('books:get', (_e, id: number) => getBook(id))
-  ipcMain.handle('books:create', (_e, input: CreateBookInput) => createBook(input))
-  ipcMain.handle('books:update', (_e, id: number, patch: UpdateBookInput) => updateBook(id, patch))
-  ipcMain.handle('books:archive', (_e, id: number, archived: boolean) => archiveBook(id, archived))
-  ipcMain.handle('books:delete', (_e, id: number) => deleteBook(id))
-  ipcMain.handle('books:importCover', () => importCover())
+  handle('books:list', (_e, includeArchived?: boolean) => listBooks(!!includeArchived))
+  handle('books:get', (_e, id: number) => getBook(id))
+  handle('books:create', (_e, input: CreateBookInput) => createBook(input))
+  handle('books:update', (_e, id: number, patch: UpdateBookInput) => updateBook(id, patch))
+  handle('books:archive', (_e, id: number, archived: boolean) => archiveBook(id, archived))
+  handle('books:delete', (_e, id: number) => deleteBook(id))
+  handle('books:importCover', () => importCover())
 
   // Chapters
-  ipcMain.handle('chapters:list', (_e, bookId: number) => listChapters(bookId))
-  ipcMain.handle('chapters:ensureFirst', (_e, bookId: number) => ensureFirstChapter(bookId))
-  ipcMain.handle('chapters:get', (_e, id: number) => getChapter(id))
-  ipcMain.handle('chapters:create', (_e, bookId: number, opts?: CreateChapterOptions) =>
+  handle('chapters:list', (_e, bookId: number) => listChapters(bookId))
+  handle('chapters:ensureFirst', (_e, bookId: number) => ensureFirstChapter(bookId))
+  handle('chapters:get', (_e, id: number) => getChapter(id))
+  handle('chapters:create', (_e, bookId: number, opts?: CreateChapterOptions) =>
     createChapter(bookId, opts)
   )
-  ipcMain.handle('chapters:rename', (_e, id: number, title: string) => renameChapter(id, title))
-  ipcMain.handle('chapters:saveContent', (_e, id: number, content: string, wordCount: number) =>
+  handle('chapters:rename', (_e, id: number, title: string) => renameChapter(id, title))
+  handle('chapters:saveContent', (_e, id: number, content: string, wordCount: number) =>
     saveChapterContent(id, content, wordCount)
   )
-  ipcMain.handle('chapters:saveMeta', (_e, id: number, patch: UpdateChapterMetaInput) =>
+  handle('chapters:saveMeta', (_e, id: number, patch: UpdateChapterMetaInput) =>
     updateChapterMeta(id, patch)
   )
-  ipcMain.handle('chapters:applyOrder', (_e, items: ChapterPlacement[]) => applyChapterOrder(items))
-  ipcMain.handle('chapters:delete', (_e, id: number) => deleteChapter(id))
+  handle('chapters:applyOrder', (_e, items: ChapterPlacement[]) => applyChapterOrder(items))
+  handle('chapters:delete', (_e, id: number) => deleteChapter(id))
 
   // Volumes
-  ipcMain.handle('volumes:list', (_e, bookId: number) => listVolumes(bookId))
-  ipcMain.handle('volumes:create', (_e, bookId: number, title?: string) =>
+  handle('volumes:list', (_e, bookId: number) => listVolumes(bookId))
+  handle('volumes:create', (_e, bookId: number, title?: string) =>
     createVolume(bookId, title)
   )
-  ipcMain.handle('volumes:rename', (_e, id: number, title: string) => renameVolume(id, title))
-  ipcMain.handle('volumes:delete', (_e, id: number, deleteChapters?: boolean) =>
+  handle('volumes:rename', (_e, id: number, title: string) => renameVolume(id, title))
+  handle('volumes:delete', (_e, id: number, deleteChapters?: boolean) =>
     deleteVolume(id, !!deleteChapters)
   )
-  ipcMain.handle('volumes:reorder', (_e, orderedIds: number[]) => reorderVolumes(orderedIds))
+  handle('volumes:reorder', (_e, orderedIds: number[]) => reorderVolumes(orderedIds))
 
   // Goals
-  ipcMain.handle('goals:get', (_e, ownerType: string, ownerId: number) =>
+  handle('goals:get', (_e, ownerType: string, ownerId: number) =>
     getGoal(ownerType, ownerId)
   )
-  ipcMain.handle(
+  handle(
     'goals:upsert',
     (
       _e,
@@ -166,20 +200,20 @@ export function registerIpcHandlers(): void {
       writingDays?: number[]
     ) => upsertGoal(ownerType, ownerId, targetWords, deadline ?? null, writingDays ?? [])
   )
-  ipcMain.handle('goals:delete', (_e, ownerType: string, ownerId: number) =>
+  handle('goals:delete', (_e, ownerType: string, ownerId: number) =>
     deleteGoal(ownerType, ownerId)
   )
 
   // Check-ins (daily progress + mood)
-  ipcMain.handle('checkins:list', (_e, ownerType: string, ownerId: number, since?: string) =>
+  handle('checkins:list', (_e, ownerType: string, ownerId: number, since?: string) =>
     listCheckins(ownerType, ownerId, since)
   )
-  ipcMain.handle(
+  handle(
     'checkins:snapshot',
     (_e, ownerType: string, ownerId: number, date: string, totalWords: number) =>
       snapshotProgress(ownerType, ownerId, date, totalWords)
   )
-  ipcMain.handle(
+  handle(
     'checkins:setMood',
     (
       _e,
@@ -192,46 +226,46 @@ export function registerIpcHandlers(): void {
   )
 
   // Lore
-  ipcMain.handle('lore:list', (_e, bookId: number) => listLore(bookId))
-  ipcMain.handle('lore:get', (_e, id: number) => getLore(id))
-  ipcMain.handle('lore:create', (_e, bookId: number, opts?: CreateLoreOptions) =>
+  handle('lore:list', (_e, bookId: number) => listLore(bookId))
+  handle('lore:get', (_e, id: number) => getLore(id))
+  handle('lore:create', (_e, bookId: number, opts?: CreateLoreOptions) =>
     createLore(bookId, opts)
   )
-  ipcMain.handle('lore:rename', (_e, id: number, title: string) => renameLore(id, title))
-  ipcMain.handle('lore:setCategory', (_e, id: number, category: string) =>
+  handle('lore:rename', (_e, id: number, title: string) => renameLore(id, title))
+  handle('lore:setCategory', (_e, id: number, category: string) =>
     setLoreCategory(id, category)
   )
-  ipcMain.handle('lore:saveContent', (_e, id: number, content: string) =>
+  handle('lore:saveContent', (_e, id: number, content: string) =>
     saveLoreContent(id, content)
   )
-  ipcMain.handle('lore:delete', (_e, id: number) => deleteLore(id))
+  handle('lore:delete', (_e, id: number) => deleteLore(id))
 
   // Characters
-  ipcMain.handle('characters:list', (_e, bookId: number) => listCharacters(bookId))
-  ipcMain.handle('characters:get', (_e, id: number) => getCharacter(id))
-  ipcMain.handle('characters:create', (_e, bookId: number, opts?: CreateCharacterOptions) =>
+  handle('characters:list', (_e, bookId: number) => listCharacters(bookId))
+  handle('characters:get', (_e, id: number) => getCharacter(id))
+  handle('characters:create', (_e, bookId: number, opts?: CreateCharacterOptions) =>
     createCharacter(bookId, opts)
   )
-  ipcMain.handle('characters:rename', (_e, id: number, name: string) => renameCharacter(id, name))
-  ipcMain.handle('characters:setFolder', (_e, id: number, folder: string | null) =>
+  handle('characters:rename', (_e, id: number, name: string) => renameCharacter(id, name))
+  handle('characters:setFolder', (_e, id: number, folder: string | null) =>
     setCharacterFolder(id, folder)
   )
-  ipcMain.handle('characters:saveFields', (_e, id: number, fieldsJson: string) =>
+  handle('characters:saveFields', (_e, id: number, fieldsJson: string) =>
     saveCharacterFields(id, fieldsJson)
   )
-  ipcMain.handle('characters:setImage', (_e, id: number, imagePath: string | null) =>
+  handle('characters:setImage', (_e, id: number, imagePath: string | null) =>
     setCharacterImage(id, imagePath)
   )
-  ipcMain.handle('characters:delete', (_e, id: number) => deleteCharacter(id))
-  ipcMain.handle('characters:importImage', () => importCharacterImage())
+  handle('characters:delete', (_e, id: number) => deleteCharacter(id))
+  handle('characters:importImage', () => importCharacterImage())
 
   // Reader
   const withAbs = (it: ReaderItem | null): ReaderItem | null =>
     it ? { ...it, abs_path: absoluteAssetPath(it.file_path) } : null
 
-  ipcMain.handle('reader:list', () => listReaderItems().map((it) => withAbs(it)))
-  ipcMain.handle('reader:get', (_e, id: number) => withAbs(getReaderItem(id)))
-  ipcMain.handle('reader:import', async () => {
+  handle('reader:list', () => listReaderItems().map((it) => withAbs(it)))
+  handle('reader:get', (_e, id: number) => withAbs(getReaderItem(id)))
+  handle('reader:import', async () => {
     const f = await importReaderFile()
     if (!f) return null
     const item = createReaderItem({
@@ -242,60 +276,60 @@ export function registerIpcHandlers(): void {
     })
     return { item: withAbs(item), sourcePath: f.sourcePath }
   })
-  ipcMain.handle('reader:deleteSource', (_e, path: string) => deleteSourceFile(path))
-  ipcMain.handle('reader:rename', (_e, id: number, title: string) =>
+  handle('reader:deleteSource', (_e, path: string) => deleteSourceFile(path))
+  handle('reader:rename', (_e, id: number, title: string) =>
     withAbs(renameReaderItem(id, title))
   )
-  ipcMain.handle('reader:setAuthor', (_e, id: number, author: string | null) =>
+  handle('reader:setAuthor', (_e, id: number, author: string | null) =>
     withAbs(setReaderAuthor(id, author))
   )
-  ipcMain.handle('reader:importCover', async (_e, id: number) => {
+  handle('reader:importCover', async (_e, id: number) => {
     const cover = await importReaderCover()
     if (!cover) return withAbs(getReaderItem(id))
     return withAbs(setReaderCover(id, cover))
   })
-  ipcMain.handle('reader:setLocation', (_e, id: number, location: string | null) =>
+  handle('reader:setLocation', (_e, id: number, location: string | null) =>
     withAbs(updateReaderLocation(id, location))
   )
-  ipcMain.handle('reader:delete', (_e, id: number) => {
+  handle('reader:delete', (_e, id: number) => {
     const row = deleteReaderItem(id)
     if (row) deleteReaderAssets([row.file_path, row.cover_path])
     return true
   })
   // Export
-  ipcMain.handle(
+  handle(
     'export:book',
     (_e, bookId: number, format: ExportFormat, options: ExportOptions) =>
       exportBook(bookId, format, options)
   )
 
   // Trash
-  ipcMain.handle('trash:list', () => listTrash())
-  ipcMain.handle('trash:restore', (_e, kind: TrashKind, id: number) => restoreTrashItem(kind, id))
-  ipcMain.handle('trash:purge', (_e, kind: TrashKind, id: number) => purgeTrashItem(kind, id))
-  ipcMain.handle('trash:empty', () => emptyTrash())
+  handle('trash:list', () => listTrash())
+  handle('trash:restore', (_e, kind: TrashKind, id: number) => restoreTrashItem(kind, id))
+  handle('trash:purge', (_e, kind: TrashKind, id: number) => purgeTrashItem(kind, id))
+  handle('trash:empty', () => emptyTrash())
 
   // Backups & archive
-  ipcMain.handle('backup:list', () => listBackups())
-  ipcMain.handle('backup:create', () => createBackup())
-  ipcMain.handle('backup:delete', (_e, path: string) => deleteBackup(path))
-  ipcMain.handle('backup:restore', (_e, path: string) => restoreBackup(path))
-  ipcMain.handle('backup:reveal', () => revealBackups())
-  ipcMain.handle('backup:archive', () => exportArchive())
-  ipcMain.handle('backup:archiveDue', () => archiveDue())
-  ipcMain.handle('backup:snoozeArchive', (_e, days?: number) => snoozeArchive(days ?? 3))
+  handle('backup:list', () => listBackups())
+  handle('backup:create', () => createBackup())
+  handle('backup:delete', (_e, path: string) => deleteBackup(path))
+  handle('backup:restore', (_e, path: string) => restoreBackup(path))
+  handle('backup:reveal', () => revealBackups())
+  handle('backup:archive', () => exportArchive())
+  handle('backup:archiveDue', () => archiveDue())
+  handle('backup:snoozeArchive', (_e, days?: number) => snoozeArchive(days ?? 3))
 
   // Notes
-  ipcMain.handle('notes:list', (_e, ownerType: string, ownerId: number) =>
+  handle('notes:list', (_e, ownerType: string, ownerId: number) =>
     listNotes(ownerType, ownerId)
   )
-  ipcMain.handle('notes:create', (_e, ownerType: string, ownerId: number) =>
+  handle('notes:create', (_e, ownerType: string, ownerId: number) =>
     createNote(ownerType, ownerId)
   )
-  ipcMain.handle('notes:update', (_e, id: number, patch: UpdateNoteInput) => updateNote(id, patch))
-  ipcMain.handle('notes:delete', (_e, id: number) => deleteNote(id))
+  handle('notes:update', (_e, id: number, patch: UpdateNoteInput) => updateNote(id, patch))
+  handle('notes:delete', (_e, id: number) => deleteNote(id))
 
-  ipcMain.handle('reader:fileData', async (_e, id: number) => {
+  handle('reader:fileData', async (_e, id: number) => {
     const it = getReaderItem(id)
     if (!it) return null
     const buf = await readFile(absoluteAssetPath(it.file_path))

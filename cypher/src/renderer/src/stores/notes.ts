@@ -37,6 +37,20 @@ export const useNotesStore = defineStore('notes', () => {
     notes.value = list ?? []
   }
 
+  /** Re-reads pinned notes after an external change. */
+  async function refresh(): Promise<void> {
+    if (bookId.value == null) return
+    const fresh = await guard('Load notes', () => window.cypher.notes.list(OWNER, bookId.value!))
+    if (!fresh) return
+    const byId = new Map(notes.value.map((n) => [n.id, n]))
+    notes.value = fresh.map((incoming) => {
+      const existing = byId.get(incoming.id)
+      if (!existing) return incoming
+      Object.assign(existing, incoming)
+      return existing
+    })
+  }
+
   async function add(): Promise<void> {
     if (bookId.value == null || notes.value.length >= MAX_NOTES) return
     const created = await guard('Create note', () =>
@@ -65,5 +79,5 @@ export const useNotesStore = defineStore('notes', () => {
     lastError.value = null
   }
 
-  return { notes, bookId, lastError, loadForBook, add, save, remove, clearError }
+  return { notes, bookId, lastError, loadForBook, refresh, add, save, remove, clearError }
 })

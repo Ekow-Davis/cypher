@@ -92,11 +92,11 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="mx-auto max-w-3xl px-10 py-12">
+  <section class="mx-auto max-w-3xl px-4 py-8 sm:px-10 sm:py-12">
     <h1 class="mb-1 text-3xl font-bold">Settings</h1>
     <p class="mb-6 text-ink-dim">Appearance and preferences.</p>
 
-    <nav class="mb-6 flex gap-1 rounded-xl bg-surface-2 p-1">
+    <nav class="mb-6 flex flex-wrap gap-1 rounded-xl bg-surface-2 p-1">
       <button
         v-for="sec in SECTIONS"
         :key="sec.key"
@@ -248,6 +248,19 @@ onMounted(async () => {
         <h2 class="text-lg font-semibold">Writing</h2>
       </div>
       <p class="mb-6 text-sm text-ink-dim">How the editor behaves while you write.</p>
+
+      <div class="mb-5">
+        <div class="mb-1 text-sm font-medium">Default author name</div>
+        <p class="mb-2 text-xs text-ink-dim">
+          Used on exports. You can still override it per export — handy for a pen name.
+        </p>
+        <input
+          :value="prefs.defaultAuthor"
+          placeholder="Your name"
+          class="w-full rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-accent-line"
+          @change="prefs.setDefaultAuthor(($event.target as HTMLInputElement).value)"
+        />
+      </div>
 
       <div class="mb-5">
         <div class="mb-1 text-sm font-medium">Autosave</div>

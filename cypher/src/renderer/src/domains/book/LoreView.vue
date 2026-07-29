@@ -12,6 +12,7 @@ import {
   Search
 } from 'lucide-vue-next'
 import { useLoreStore } from '@/stores/lore'
+import { useBreakpoint } from '@/lib/useBreakpoint'
 import LoreEditor from './LoreEditor.vue'
 import LoreSidebar from './LoreSidebar.vue'
 import LoreSearch from './LoreSearch.vue'
@@ -19,6 +20,7 @@ import LoreSearch from './LoreSearch.vue'
 defineProps<{ showSidebar?: boolean }>()
 
 const store = useLoreStore()
+const { isTight } = useBreakpoint()
 const collapsed = reactive<Record<string, boolean>>({})
 const searching = ref(false)
 
@@ -57,7 +59,7 @@ async function confirmNewCategory(): Promise<void> {
       </button>
     </div>
 
-    <div class="flex flex-1 overflow-hidden">
+    <div class="relative flex flex-1 overflow-hidden">
       <!-- entry list -->
       <aside class="flex w-64 shrink-0 flex-col border-r border-border bg-surface/60">
         <div class="flex items-center justify-between border-b border-border px-4 py-3">
@@ -154,7 +156,7 @@ async function confirmNewCategory(): Promise<void> {
       </aside>
 
       <!-- editor -->
-      <main class="flex-1 overflow-hidden">
+      <main class="min-w-0 flex-1 overflow-hidden">
         <LoreEditor v-if="store.active" :entry="store.active" />
         <div v-else class="flex h-full items-center justify-center text-ink-dim">
           Select or create a lore entry.
@@ -162,7 +164,10 @@ async function confirmNewCategory(): Promise<void> {
       </main>
 
       <!-- right sidebar -->
-      <LoreSidebar v-if="showSidebar" />
+      <LoreSidebar
+        v-if="showSidebar"
+        :class="isTight ? 'absolute inset-y-0 right-0 z-30 shadow-2xl' : ''"
+      />
     </div>
   </div>
 </template>

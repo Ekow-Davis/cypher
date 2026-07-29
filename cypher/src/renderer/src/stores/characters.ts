@@ -67,6 +67,29 @@ export const useCharactersStore = defineStore('characters', () => {
     loaded.value = true
   }
 
+  /** Re-reads the cast after an external change, preserving the open sheet. */
+  async function refresh(): Promise<void> {
+    if (bookId.value == null) return
+    const fresh = await guard('Load characters', () =>
+      window.cypher.characters.list(bookId.value!)
+    )
+    if (!fresh) return
+    const byId = new Map(characters.value.map((c) => [c.id, c]))
+    characters.value = fresh.map((incoming) => {
+      const existing = byId.get(incoming.id)
+      if (!existing) return incoming
+      const patch =
+        existing.id === activeId.value
+          ? { ...incoming, fields_json: existing.fields_json }
+          : incoming
+      Object.assign(existing, patch)
+      return existing
+    })
+    if (activeId.value != null && !characters.value.some((c) => c.id === activeId.value)) {
+      activeId.value = characters.value[0]?.id ?? null
+    }
+  }
+
   async function add(folder: string | null = null): Promise<void> {
     if (bookId.value == null) {
       lastError.value = 'No book loaded yet — reopen the book and try again.'
@@ -168,6 +191,7 @@ export const useCharactersStore = defineStore('characters', () => {
     groups,
     folderNames,
     loadForBook,
+    refresh,
     add,
     createNamed,
     rename,
