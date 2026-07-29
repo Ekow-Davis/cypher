@@ -202,3 +202,14 @@ export function migration005(db: Database): void {
     );
   `)
 }
+
+/**
+ * Migration 006 — pinned notes get a title and a colour, so the sticky notes
+ * beside the editor can be labelled and colour-coded at a glance.
+ */
+export function migration006(db: Database): void {
+  db.exec(`
+    ALTER TABLE notes ADD COLUMN title TEXT NOT NULL DEFAULT '';
+    ALTER TABLE notes ADD COLUMN color TEXT;
+  `)
+}

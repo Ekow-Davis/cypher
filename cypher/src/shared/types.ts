@@ -145,3 +145,19 @@ export interface ReaderImportResult {
   item: ReaderItem
   sourcePath: string
 }
+
+export interface Note {
+  id: number
+  owner_type: string
+  owner_id: number
+  slot: number
+  title: string
+  content: string
+  color: string | null
+}
+
+export interface UpdateNoteInput {
+  title?: string
+  content?: string
+  color?: string | null
+}

@@ -8,14 +8,17 @@ import {
   ChevronRight,
   UserRound,
   AlertCircle,
-  X
+  X,
+  Search
 } from 'lucide-vue-next'
 import { useCharactersStore } from '@/stores/characters'
 import { assetUrl } from '@/lib/assets'
 import CharacterSheet from './CharacterSheet.vue'
+import CharacterSearch from './CharacterSearch.vue'
 
 const store = useCharactersStore()
 const collapsed = reactive<Record<string, boolean>>({})
+const searching = ref(false)
 
 function toggle(folder: string): void {
   collapsed[folder] = !collapsed[folder]
@@ -60,6 +63,13 @@ async function confirmNewFolder(): Promise<void> {
           <div class="flex items-center gap-1">
             <button
               class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+              title="Search cast"
+              @click="searching = true"
+            >
+              <Search :size="16" />
+            </button>
+            <button
+              class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
               title="New folder"
               @click="startNewFolder"
             >
@@ -88,7 +98,9 @@ async function confirmNewFolder(): Promise<void> {
           <p class="mt-1 text-[10px] text-ink-dim">Enter to create · Esc to cancel</p>
         </div>
 
-        <div class="flex-1 overflow-auto py-2">
+        <CharacterSearch v-if="searching" @close="searching = false" />
+
+        <div v-else class="flex-1 overflow-auto py-2">
           <div v-if="!store.characters.length" class="px-4 py-6 text-center text-xs text-ink-dim">
             No characters yet. Create your first.
           </div>

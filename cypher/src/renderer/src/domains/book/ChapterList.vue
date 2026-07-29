@@ -8,12 +8,15 @@ import {
   ChevronRight,
   ChevronUp,
   GripVertical,
-  FolderPlus
+  FolderPlus,
+  Search
 } from 'lucide-vue-next'
 import { useChaptersStore } from '@/stores/chapters'
+import ManuscriptSearch from './ManuscriptSearch.vue'
 import type { Chapter, Volume, ChapterPlacement } from '@shared/types'
 
 const store = useChaptersStore()
+const searching = ref(false)
 
 interface Group {
   volume: Volume
@@ -101,6 +104,13 @@ async function confirmDeleteVolume(): Promise<void> {
       <div class="flex items-center gap-1">
         <button
           class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+          title="Search manuscript"
+          @click="searching = true"
+        >
+          <Search :size="16" />
+        </button>
+        <button
+          class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
           title="Add volume"
           @click="store.addVolume()"
         >
@@ -116,7 +126,9 @@ async function confirmDeleteVolume(): Promise<void> {
       </div>
     </div>
 
-    <div class="flex-1 overflow-auto py-2">
+    <ManuscriptSearch v-if="searching" @close="searching = false" />
+
+    <div v-else class="flex-1 overflow-auto py-2">
       <!-- volumes -->
       <div v-for="(g, gi) in groups" :key="g.volume.id" class="mb-1">
         <div

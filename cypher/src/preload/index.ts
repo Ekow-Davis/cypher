@@ -14,7 +14,9 @@ import type {
   Character,
   CreateCharacterOptions,
   ReaderItem,
-  ReaderImportResult
+  ReaderImportResult,
+  Note,
+  UpdateNoteInput
 } from '@shared/types'
 
 const cypher = {
@@ -139,6 +141,16 @@ const cypher = {
       ipcRenderer.invoke('characters:setImage', id, imagePath),
     remove: (id: number): Promise<void> => ipcRenderer.invoke('characters:delete', id),
     importImage: (): Promise<string | null> => ipcRenderer.invoke('characters:importImage')
+  },
+
+  notes: {
+    list: (ownerType: string, ownerId: number): Promise<Note[]> =>
+      ipcRenderer.invoke('notes:list', ownerType, ownerId),
+    create: (ownerType: string, ownerId: number): Promise<Note> =>
+      ipcRenderer.invoke('notes:create', ownerType, ownerId),
+    update: (id: number, patch: UpdateNoteInput): Promise<Note | null> =>
+      ipcRenderer.invoke('notes:update', id, patch),
+    remove: (id: number): Promise<void> => ipcRenderer.invoke('notes:delete', id)
   },
 
   reader: {

@@ -8,6 +8,7 @@ import { useInsightsStore } from '@/stores/insights'
 import { useLoreStore } from '@/stores/lore'
 import { useCharactersStore } from '@/stores/characters'
 import { useBookUiStore } from '@/stores/bookUi'
+import { useNotesStore } from '@/stores/notes'
 import ChapterList from './ChapterList.vue'
 import ChapterEditor from './ChapterEditor.vue'
 import InsightsSidebar from './InsightsSidebar.vue'
@@ -23,6 +24,7 @@ const insights = useInsightsStore()
 const lore = useLoreStore()
 const characters = useCharactersStore()
 const ui = useBookUiStore()
+const notes = useNotesStore()
 
 const book = ref<Book | null>(null)
 const showInsights = ref(true)
@@ -36,7 +38,8 @@ onMounted(async () => {
     chapters.loadForBook(id),
     insights.loadForBook(id),
     lore.loadForBook(id),
-    characters.loadForBook(id)
+    characters.loadForBook(id),
+    notes.loadForBook(id)
   ])
 })
 </script>

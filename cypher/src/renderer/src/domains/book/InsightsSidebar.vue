@@ -15,6 +15,7 @@ import {
 } from 'lucide-vue-next'
 import { useChaptersStore } from '@/stores/chapters'
 import { useInsightsStore } from '@/stores/insights'
+import PinnedNotes from './PinnedNotes.vue'
 import { extractPlainText, wordFrequency, phraseFrequency, type FreqItem } from '@/lib/textStats'
 
 const chaptersStore = useChaptersStore()
@@ -355,6 +356,9 @@ function analyze(): void {
           />
         </div>
       </section>
+
+      <!-- PINNED NOTES -->
+      <PinnedNotes />
 
       <!-- FREQUENCY -->
       <section class="rounded-xl border border-border bg-surface">

@@ -8,16 +8,19 @@ import {
   ChevronRight,
   ScrollText,
   AlertCircle,
-  X
+  X,
+  Search
 } from 'lucide-vue-next'
 import { useLoreStore } from '@/stores/lore'
 import LoreEditor from './LoreEditor.vue'
 import LoreSidebar from './LoreSidebar.vue'
+import LoreSearch from './LoreSearch.vue'
 
 defineProps<{ showSidebar?: boolean }>()
 
 const store = useLoreStore()
 const collapsed = reactive<Record<string, boolean>>({})
+const searching = ref(false)
 
 function toggle(category: string): void {
   collapsed[category] = !collapsed[category]
@@ -62,6 +65,13 @@ async function confirmNewCategory(): Promise<void> {
           <div class="flex items-center gap-1">
             <button
               class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+              title="Search codex"
+              @click="searching = true"
+            >
+              <Search :size="16" />
+            </button>
+            <button
+              class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
               title="New category"
               @click="startNewCategory"
             >
@@ -91,7 +101,9 @@ async function confirmNewCategory(): Promise<void> {
           <p class="mt-1 text-[10px] text-ink-dim">Enter to create · Esc to cancel</p>
         </div>
 
-        <div class="flex-1 overflow-auto py-2">
+        <LoreSearch v-if="searching" @close="searching = false" />
+
+        <div v-else class="flex-1 overflow-auto py-2">
           <div v-if="!store.entries.length" class="px-4 py-6 text-center text-xs text-ink-dim">
             No lore yet. Create your first entry.
           </div>

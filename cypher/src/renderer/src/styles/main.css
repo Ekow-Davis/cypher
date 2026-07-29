@@ -131,3 +131,11 @@ body {
   background: color-mix(in oklab, var(--color-accent) 22%, transparent);
   text-decoration: underline;
 }
+
+/* ---------- Search highlight ---------- */
+.cypher-mark {
+  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-ink);
+  border-radius: 3px;
+  padding: 0 1px;
+}

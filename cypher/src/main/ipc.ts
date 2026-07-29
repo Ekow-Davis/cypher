@@ -28,6 +28,7 @@ import {
   reorderVolumes
 } from './db/repositories/volumes'
 import { getGoal, upsertGoal, deleteGoal } from './db/repositories/goals'
+import { listNotes, createNote, updateNote, deleteNote } from './db/repositories/notes'
 import {
   listLore,
   getLore,
@@ -76,7 +77,8 @@ import type {
   ChapterPlacement,
   CreateLoreOptions,
   CreateCharacterOptions,
-  ReaderItem
+  ReaderItem,
+  UpdateNoteInput
 } from '@shared/types'
 
 export function registerIpcHandlers(): void {
@@ -235,6 +237,16 @@ export function registerIpcHandlers(): void {
     if (row) deleteReaderAssets([row.file_path, row.cover_path])
     return true
   })
+  // Notes
+  ipcMain.handle('notes:list', (_e, ownerType: string, ownerId: number) =>
+    listNotes(ownerType, ownerId)
+  )
+  ipcMain.handle('notes:create', (_e, ownerType: string, ownerId: number) =>
+    createNote(ownerType, ownerId)
+  )
+  ipcMain.handle('notes:update', (_e, id: number, patch: UpdateNoteInput) => updateNote(id, patch))
+  ipcMain.handle('notes:delete', (_e, id: number) => deleteNote(id))
+
   ipcMain.handle('reader:fileData', async (_e, id: number) => {
     const it = getReaderItem(id)
     if (!it) return null
