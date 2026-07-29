@@ -9,7 +9,7 @@ const props = defineProps<{ item: ReaderItem }>()
 const store = useReaderStore()
 
 const viewer = ref<HTMLElement | null>(null)
-// epubjs ships no reliable types; keep these loosely typed.
+/* epubjs ships no reliable types; keep these loosely typed. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 let book: any = null
 let rendition: any = null
@@ -22,15 +22,16 @@ const showSettings = ref(false)
 const currentHref = ref('')
 const percent = ref(0)
 
-// display prefs (persisted globally)
+// ---- display prefs (persisted globally) ----
 const fontSize = ref(110)
 const fontFamily = ref<'default' | 'serif' | 'sans'>('default')
-const lineHeight = ref(1.5)
+const lineHeight = ref(1.6)
 const theme = ref<'light' | 'sepia' | 'dark'>('light')
-const flow = ref<'paginated' | 'scrolled-doc'>('paginated')
+const flow = ref<'paginated' | 'scrolled'>('scrolled') // scrolled is the default
+const widthKey = ref<'narrow' | 'medium' | 'wide' | 'full'>('medium')
 
 const FONTS: Record<string, string> = {
-  default: 'initial',
+  default: '',
   serif: 'Georgia, "Times New Roman", serif',
   sans: 'system-ui, -apple-system, sans-serif'
 }
@@ -39,9 +40,19 @@ const THEMES = {
   sepia: { color: '#5b4636', background: '#f4ecd8' },
   dark: { color: '#cfcfcf', background: '#1a1a1a' }
 }
+const WIDTHS: Record<string, number> = { narrow: 560, medium: 720, wide: 900, full: 0 }
+
 const themeBg = computed(() => THEMES[theme.value].background)
+const isScrolled = computed(() => flow.value === 'scrolled')
+// 0 = full bleed; otherwise cap the reading column and centre it.
+const stageStyle = computed(() => {
+  const max = WIDTHS[widthKey.value]
+  return max ? { maxWidth: `${max}px`, margin: '0 auto' } : { maxWidth: '100%' }
+})
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let resizeTimer: ReturnType<typeof setTimeout> | null = null
+let ro: ResizeObserver | null = null
 
 async function loadPrefs(): Promise<void> {
   try {
@@ -51,7 +62,10 @@ async function loadPrefs(): Promise<void> {
       if (raw.fontFamily) fontFamily.value = raw.fontFamily
       if (raw.lineHeight) lineHeight.value = raw.lineHeight
       if (raw.theme) theme.value = raw.theme
-      if (raw.flow) flow.value = raw.flow
+      if (raw.width) widthKey.value = raw.width
+      // migrate the old 'scrolled-doc' value
+      if (raw.flow === 'paginated') flow.value = 'paginated'
+      else if (raw.flow) flow.value = 'scrolled'
     }
   } catch {
     /* first run */
@@ -63,25 +77,72 @@ function savePrefs(): void {
     fontFamily: fontFamily.value,
     lineHeight: lineHeight.value,
     theme: theme.value,
-    flow: flow.value
+    flow: flow.value,
+    width: widthKey.value
   })
+}
+
+/** Measure the element epub.js renders into. */
+function measure(): { w: number; h: number } {
+  const el = viewer.value
+  if (!el) return { w: 600, h: 600 }
+  return {
+    w: Math.max(240, Math.floor(el.clientWidth)),
+    h: Math.max(240, Math.floor(el.clientHeight))
+  }
+}
+
+/** Re-measure and tell epub.js its new size. This is what keeps the iframe
+ *  in step with panels opening/closing and window resizes. */
+function applyResize(): void {
+  if (!rendition) return
+  const { w, h } = measure()
+  try {
+    rendition.resize(w, h)
+  } catch {
+    /* ignore transient resize errors */
+  }
+}
+function scheduleResize(): void {
+  if (resizeTimer) clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(applyResize, 120)
 }
 
 function applyStyles(): void {
   if (!rendition) return
   const t = THEMES[theme.value]
-  rendition.themes.override('color', t.color)
-  rendition.themes.override('background', t.background)
-  rendition.themes.override('line-height', String(lineHeight.value))
-  rendition.themes.override('font-family', FONTS[fontFamily.value])
+  const fam = FONTS[fontFamily.value]
+  const textRule: Record<string, string> = { 'line-height': `${lineHeight.value} !important` }
+  if (fam) textRule['font-family'] = `${fam} !important`
+
+  rendition.themes.default({
+    body: {
+      color: `${t.color} !important`,
+      background: `${t.background} !important`,
+      padding: '0 !important',
+      ...textRule
+    },
+    'p, li, div, span': textRule,
+    img: { 'max-width': '100% !important', height: 'auto !important' },
+    a: { color: 'inherit !important' }
+  })
   rendition.themes.fontSize(`${fontSize.value}%`)
+}
+
+function renditionOptions(): Record<string, unknown> {
+  const { w, h } = measure()
+  return flow.value === 'paginated'
+    ? { width: w, height: h, flow: 'paginated', spread: 'none' }
+    : { width: w, height: h, flow: 'scrolled', manager: 'continuous' }
 }
 
 function bindRendition(): void {
   rendition.on('relocated', (loc: any) => {
     currentHref.value = loc?.start?.href || ''
     if (loc?.start?.cfi) scheduleSaveLocation(loc.start.cfi)
-    if (typeof loc?.start?.percentage === 'number') percent.value = Math.round(loc.start.percentage * 100)
+    if (typeof loc?.start?.percentage === 'number') {
+      percent.value = Math.round(loc.start.percentage * 100)
+    }
   })
   rendition.on('keyup', onKey)
 }
@@ -97,20 +158,16 @@ async function render(): Promise<void> {
     }
     book = ePub(data)
     await nextTick()
-    rendition = book.renderTo(viewer.value as HTMLElement, {
-      width: '100%',
-      height: '100%',
-      flow: flow.value,
-      spread: 'none'
-    })
+    rendition = book.renderTo(viewer.value as HTMLElement, renditionOptions())
     applyStyles()
     await rendition.display(props.item.last_location || undefined)
     applyStyles()
+    // a settle pass: fonts/images can change metrics after first paint
+    scheduleResize()
 
     const nav = await book.loaded.navigation
     toc.value = nav.toc || []
 
-    // percentage needs generated locations (async, non-blocking)
     book.locations
       .generate(1000)
       .then(() => {
@@ -131,8 +188,9 @@ async function render(): Promise<void> {
   }
 }
 
+/** Rebuild the rendition (needed when flow changes), preserving position. */
 async function recreate(): Promise<void> {
-  if (!book) return
+  if (!book || !viewer.value) return
   let cfi: string | undefined
   try {
     cfi = rendition?.currentLocation()?.start?.cfi
@@ -144,16 +202,13 @@ async function recreate(): Promise<void> {
   } catch {
     /* ignore */
   }
-  rendition = book.renderTo(viewer.value as HTMLElement, {
-    width: '100%',
-    height: '100%',
-    flow: flow.value,
-    spread: 'none'
-  })
+  await nextTick()
+  rendition = book.renderTo(viewer.value, renditionOptions())
   applyStyles()
   await rendition.display(cfi || props.item.last_location || undefined)
   applyStyles()
   bindRendition()
+  scheduleResize()
 }
 
 function scheduleSaveLocation(cfi: string): void {
@@ -201,30 +256,33 @@ function setLineHeight(delta: number): void {
 watch([fontSize, fontFamily, lineHeight, theme], () => {
   applyStyles()
   savePrefs()
+  scheduleResize()
+})
+watch(widthKey, () => {
+  savePrefs()
+  scheduleResize() // the stage element resized; observer also fires
 })
 watch(flow, () => {
   savePrefs()
   void recreate()
 })
-
-function onResize(): void {
-  try {
-    rendition?.resize()
-  } catch {
-    /* ignore */
-  }
-}
+// panels change the available width -> re-measure
+watch([showToc, showSettings], () => scheduleResize())
 
 onMounted(async () => {
   await loadPrefs()
   await render()
   window.addEventListener('keydown', onKey)
-  window.addEventListener('resize', onResize)
+  if (viewer.value && typeof ResizeObserver !== 'undefined') {
+    ro = new ResizeObserver(() => scheduleResize())
+    ro.observe(viewer.value)
+  }
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
-  window.removeEventListener('resize', onResize)
   if (saveTimer) clearTimeout(saveTimer)
+  if (resizeTimer) clearTimeout(resizeTimer)
+  ro?.disconnect()
   try {
     rendition?.destroy()
   } catch {
@@ -239,20 +297,30 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col" :style="{ background: themeBg }">
+  <div class="flex h-full flex-col">
     <!-- top bar -->
     <div class="flex items-center gap-2 border-b border-border bg-surface px-4 py-2">
-      <button class="rounded-lg p-1.5 text-ink-dim hover:bg-surface-2 hover:text-ink" title="Contents" @click="showToc = !showToc">
+      <button
+        class="rounded-lg p-1.5 transition-colors"
+        :class="showToc ? 'bg-surface-2 text-accent' : 'text-ink-dim hover:bg-surface-2 hover:text-ink'"
+        title="Contents"
+        @click="showToc = !showToc"
+      >
         <List :size="16" />
       </button>
       <span class="min-w-0 flex-1 truncate text-sm text-ink-dim">{{ currentChapterLabel }}</span>
       <span class="shrink-0 text-xs tabular-nums text-ink-dim">{{ percent }}%</span>
-      <button class="rounded-lg p-1.5 text-ink-dim hover:bg-surface-2 hover:text-ink" title="Display" @click="showSettings = !showSettings">
+      <button
+        class="rounded-lg p-1.5 transition-colors"
+        :class="showSettings ? 'bg-surface-2 text-accent' : 'text-ink-dim hover:bg-surface-2 hover:text-ink'"
+        title="Display"
+        @click="showSettings = !showSettings"
+      >
         <Settings2 :size="16" />
       </button>
     </div>
 
-    <div class="relative flex flex-1 overflow-hidden">
+    <div class="flex min-h-0 flex-1">
       <!-- TOC -->
       <div v-if="showToc" class="w-64 shrink-0 overflow-auto border-r border-border bg-surface py-2">
         <div class="px-4 py-1 text-xs font-semibold uppercase tracking-wider text-ink-dim">Contents</div>
@@ -275,39 +343,91 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- reader surface -->
-      <div class="relative flex-1">
+      <div class="relative min-w-0 flex-1 overflow-hidden" :style="{ background: themeBg }">
+        <!-- page arrows: paged mode only -->
         <button
-          class="absolute left-0 top-0 z-10 flex h-full w-12 items-center justify-center text-ink-dim/40 transition-colors hover:bg-black/5 hover:text-ink-dim"
-          title="Previous"
+          v-if="!isScrolled"
+          class="absolute left-0 top-0 z-10 flex h-full w-10 items-center justify-center text-black/25 transition-colors hover:bg-black/5"
+          title="Previous page"
           @click="prev"
         >
-          <ChevronLeft :size="24" />
+          <ChevronLeft :size="22" />
         </button>
-        <div ref="viewer" class="h-full w-full px-12"></div>
         <button
-          class="absolute right-0 top-0 z-10 flex h-full w-12 items-center justify-center text-ink-dim/40 transition-colors hover:bg-black/5 hover:text-ink-dim"
-          title="Next"
+          v-if="!isScrolled"
+          class="absolute right-0 top-0 z-10 flex h-full w-10 items-center justify-center text-black/25 transition-colors hover:bg-black/5"
+          title="Next page"
           @click="next"
         >
-          <ChevronRight :size="24" />
+          <ChevronRight :size="22" />
         </button>
+
+        <!-- sizing stage: epub.js measures THIS element -->
+        <div class="h-full" :class="isScrolled ? 'px-6' : 'px-12'">
+          <div ref="viewer" class="h-full w-full" :style="stageStyle"></div>
+        </div>
 
         <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-surface/80 text-ink-dim">
           <Loader2 :size="24" class="animate-spin" />
         </div>
-        <div v-else-if="errorMsg" class="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-red-400">
+        <div
+          v-else-if="errorMsg"
+          class="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-red-400"
+        >
           {{ errorMsg }}
         </div>
       </div>
 
       <!-- settings -->
-      <div v-if="showSettings" class="w-64 shrink-0 space-y-5 overflow-auto border-l border-border bg-surface p-4">
+      <div
+        v-if="showSettings"
+        class="w-64 shrink-0 space-y-5 overflow-auto border-l border-border bg-surface p-4"
+      >
+        <div>
+          <div class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-dim">Layout</div>
+          <div class="grid grid-cols-2 gap-1">
+            <button
+              class="rounded-lg border px-2 py-1.5 text-xs"
+              :class="isScrolled ? 'border-accent text-accent' : 'border-border text-ink-dim hover:text-ink'"
+              @click="flow = 'scrolled'"
+            >
+              Scrolled
+            </button>
+            <button
+              class="rounded-lg border px-2 py-1.5 text-xs"
+              :class="!isScrolled ? 'border-accent text-accent' : 'border-border text-ink-dim hover:text-ink'"
+              @click="flow = 'paginated'"
+            >
+              Paged
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-dim">Reading width</div>
+          <div class="grid grid-cols-2 gap-1">
+            <button
+              v-for="w in (['narrow', 'medium', 'wide', 'full'] as const)"
+              :key="w"
+              class="rounded-lg border px-2 py-1.5 text-xs capitalize"
+              :class="widthKey === w ? 'border-accent text-accent' : 'border-border text-ink-dim hover:text-ink'"
+              @click="widthKey = w"
+            >
+              {{ w }}
+            </button>
+          </div>
+        </div>
+
         <div>
           <div class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-dim">Font size</div>
           <div class="flex items-center gap-2">
-            <button class="rounded-lg border border-border p-1.5 hover:bg-surface-2" @click="setFontSize(-10)"><Minus :size="14" /></button>
+            <button class="rounded-lg border border-border p-1.5 hover:bg-surface-2" @click="setFontSize(-10)">
+              <Minus :size="14" />
+            </button>
             <span class="flex-1 text-center text-sm tabular-nums">{{ fontSize }}%</span>
-            <button class="rounded-lg border border-border p-1.5 hover:bg-surface-2" @click="setFontSize(10)"><Plus :size="14" /></button>
+            <button class="rounded-lg border border-border p-1.5 hover:bg-surface-2" @click="setFontSize(10)">
+              <Plus :size="14" />
+            </button>
           </div>
         </div>
 
@@ -329,9 +449,13 @@ onBeforeUnmount(() => {
         <div>
           <div class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-dim">Line spacing</div>
           <div class="flex items-center gap-2">
-            <button class="rounded-lg border border-border p-1.5 hover:bg-surface-2" @click="setLineHeight(-0.1)"><Minus :size="14" /></button>
+            <button class="rounded-lg border border-border p-1.5 hover:bg-surface-2" @click="setLineHeight(-0.1)">
+              <Minus :size="14" />
+            </button>
             <span class="flex-1 text-center text-sm tabular-nums">{{ lineHeight.toFixed(1) }}</span>
-            <button class="rounded-lg border border-border p-1.5 hover:bg-surface-2" @click="setLineHeight(0.1)"><Plus :size="14" /></button>
+            <button class="rounded-lg border border-border p-1.5 hover:bg-surface-2" @click="setLineHeight(0.1)">
+              <Plus :size="14" />
+            </button>
           </div>
         </div>
 
@@ -347,26 +471,6 @@ onBeforeUnmount(() => {
               @click="theme = th"
             >
               {{ th }}
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <div class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-dim">Layout</div>
-          <div class="grid grid-cols-2 gap-1">
-            <button
-              class="rounded-lg border px-2 py-1.5 text-xs"
-              :class="flow === 'paginated' ? 'border-accent text-accent' : 'border-border text-ink-dim hover:text-ink'"
-              @click="flow = 'paginated'"
-            >
-              Paged
-            </button>
-            <button
-              class="rounded-lg border px-2 py-1.5 text-xs"
-              :class="flow === 'scrolled-doc' ? 'border-accent text-accent' : 'border-border text-ink-dim hover:text-ink'"
-              @click="flow = 'scrolled-doc'"
-            >
-              Scrolled
             </button>
           </div>
         </div>
