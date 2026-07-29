@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { NotebookPen, FileText, BookOpen, Settings, Sun, Moon } from 'lucide-vue-next'
+import { NotebookPen, FileText, BookOpen, BookMarked, Settings, Sun, Moon } from 'lucide-vue-next'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 
@@ -11,7 +11,8 @@ const theme = useThemeStore()
 const items = [
   { to: '/diary', label: 'Diary', icon: NotebookPen },
   { to: '/document', label: 'Document', icon: FileText },
-  { to: '/book', label: 'Book', icon: BookOpen }
+  { to: '/book', label: 'Book', icon: BookOpen },
+  { to: '/reader', label: 'Reader', icon: BookMarked }
 ]
 
 // Show the icon for the action: a sun (switch to light) while dark, a moon while light.

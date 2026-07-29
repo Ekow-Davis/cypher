@@ -163,3 +163,42 @@ export function migration002(db: Database): void {
       ON checkins(owner_type, owner_id, date);
   `)
 }
+
+/**
+ * Migration 003 — per-day deletions counter.
+ * Tracks words removed each day separately from words written, so an editing
+ * day shows both "+written" and "-deleted" without the two cancelling out.
+ */
+export function migration003(db: Database): void {
+  db.exec(`ALTER TABLE checkins ADD COLUMN words_deleted INTEGER NOT NULL DEFAULT 0;`)
+}
+
+/**
+ * Migration 004 — lore categories.
+ * Adds a category to lore entries so the codex can be grouped (Locations,
+ * Factions, History, Magic, …) in the sidebar.
+ */
+export function migration004(db: Database): void {
+  db.exec(`ALTER TABLE lore_entries ADD COLUMN category TEXT NOT NULL DEFAULT 'General';`)
+}
+
+/**
+ * Migration 005 — the reader library.
+ * Imported EPUB/PDF books are copied into app storage; this table tracks them,
+ * their cover, the original source path (for reference), and resume position.
+ */
+export function migration005(db: Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS reader_items (
+      id            INTEGER PRIMARY KEY,
+      title         TEXT    NOT NULL,
+      author        TEXT,
+      format        TEXT    NOT NULL,            -- 'epub' | 'pdf'
+      file_path     TEXT    NOT NULL,            -- relative under assets/, e.g. 'reader/<uuid>.epub'
+      cover_path    TEXT,                        -- relative under assets/, nullable
+      source_path   TEXT,                        -- original absolute path at import time
+      last_location TEXT,                        -- resume position (epub CFI / pdf page)
+      added_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+}

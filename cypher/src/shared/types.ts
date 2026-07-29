@@ -74,6 +74,74 @@ export interface Checkin {
   mood: string | null
   note: string | null
   words_written: number
+  words_deleted: number
   total_words: number
   day_start_words: number | null
+}
+
+export interface LoreEntry {
+  id: number
+  book_id: number
+  title: string
+  content: string // Tiptap document JSON (stringified)
+  category: string
+  sort_order: number
+}
+
+export interface CreateLoreOptions {
+  title?: string
+  category?: string
+}
+
+export interface Character {
+  id: number
+  book_id: number
+  folder: string | null
+  name: string
+  image_path: string | null
+  fields_json: string
+}
+
+export type FieldType = 'text' | 'multiline'
+
+export interface CharacterField {
+  id: string
+  label: string
+  value: string
+  type: FieldType
+}
+
+export interface CharacterSection {
+  id: string
+  title: string
+  fields: CharacterField[]
+}
+
+export interface CharacterSheet {
+  sections: CharacterSection[]
+}
+
+export interface CreateCharacterOptions {
+  name?: string
+  folder?: string | null
+}
+
+export type ReaderFormat = 'epub' | 'pdf'
+
+export interface ReaderItem {
+  id: number
+  title: string
+  author: string | null
+  format: ReaderFormat
+  file_path: string
+  cover_path: string | null
+  source_path: string | null
+  last_location: string | null
+  added_at: string
+  abs_path?: string // absolute path on disk, enriched by main for display
+}
+
+export interface ReaderImportResult {
+  item: ReaderItem
+  sourcePath: string
 }

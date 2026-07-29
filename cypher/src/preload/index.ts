@@ -8,7 +8,13 @@ import type {
   ChapterPlacement,
   Volume,
   Goal,
-  Checkin
+  Checkin,
+  LoreEntry,
+  CreateLoreOptions,
+  Character,
+  CreateCharacterOptions,
+  ReaderItem,
+  ReaderImportResult
 } from '@shared/types'
 
 const cypher = {
@@ -101,6 +107,57 @@ const cypher = {
       note: string | null
     ): Promise<Checkin> =>
       ipcRenderer.invoke('checkins:setMood', ownerType, ownerId, date, mood, note)
+  },
+
+  lore: {
+    list: (bookId: number): Promise<LoreEntry[]> => ipcRenderer.invoke('lore:list', bookId),
+    get: (id: number): Promise<LoreEntry | null> => ipcRenderer.invoke('lore:get', id),
+    create: (bookId: number, opts?: CreateLoreOptions): Promise<LoreEntry> =>
+      ipcRenderer.invoke('lore:create', bookId, opts),
+    rename: (id: number, title: string): Promise<LoreEntry | null> =>
+      ipcRenderer.invoke('lore:rename', id, title),
+    setCategory: (id: number, category: string): Promise<LoreEntry | null> =>
+      ipcRenderer.invoke('lore:setCategory', id, category),
+    saveContent: (id: number, content: string): Promise<LoreEntry | null> =>
+      ipcRenderer.invoke('lore:saveContent', id, content),
+    remove: (id: number): Promise<void> => ipcRenderer.invoke('lore:delete', id)
+  },
+
+  characters: {
+    list: (bookId: number): Promise<Character[]> =>
+      ipcRenderer.invoke('characters:list', bookId),
+    get: (id: number): Promise<Character | null> => ipcRenderer.invoke('characters:get', id),
+    create: (bookId: number, opts?: CreateCharacterOptions): Promise<Character> =>
+      ipcRenderer.invoke('characters:create', bookId, opts),
+    rename: (id: number, name: string): Promise<Character | null> =>
+      ipcRenderer.invoke('characters:rename', id, name),
+    setFolder: (id: number, folder: string | null): Promise<Character | null> =>
+      ipcRenderer.invoke('characters:setFolder', id, folder),
+    saveFields: (id: number, fieldsJson: string): Promise<Character | null> =>
+      ipcRenderer.invoke('characters:saveFields', id, fieldsJson),
+    setImage: (id: number, imagePath: string | null): Promise<Character | null> =>
+      ipcRenderer.invoke('characters:setImage', id, imagePath),
+    remove: (id: number): Promise<void> => ipcRenderer.invoke('characters:delete', id),
+    importImage: (): Promise<string | null> => ipcRenderer.invoke('characters:importImage')
+  },
+
+  reader: {
+    list: (): Promise<ReaderItem[]> => ipcRenderer.invoke('reader:list'),
+    get: (id: number): Promise<ReaderItem | null> => ipcRenderer.invoke('reader:get', id),
+    import: (): Promise<ReaderImportResult | null> => ipcRenderer.invoke('reader:import'),
+    deleteSource: (path: string): Promise<boolean> =>
+      ipcRenderer.invoke('reader:deleteSource', path),
+    rename: (id: number, title: string): Promise<ReaderItem | null> =>
+      ipcRenderer.invoke('reader:rename', id, title),
+    setAuthor: (id: number, author: string | null): Promise<ReaderItem | null> =>
+      ipcRenderer.invoke('reader:setAuthor', id, author),
+    importCover: (id: number): Promise<ReaderItem | null> =>
+      ipcRenderer.invoke('reader:importCover', id),
+    setLocation: (id: number, location: string | null): Promise<ReaderItem | null> =>
+      ipcRenderer.invoke('reader:setLocation', id, location),
+    remove: (id: number): Promise<boolean> => ipcRenderer.invoke('reader:delete', id),
+    fileData: (id: number): Promise<ArrayBuffer | null> =>
+      ipcRenderer.invoke('reader:fileData', id)
   }
 }
 

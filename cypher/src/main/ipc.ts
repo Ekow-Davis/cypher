@@ -1,4 +1,5 @@
 import { app, ipcMain } from 'electron'
+import { readFile } from 'node:fs/promises'
 import { getSetting, getAllSettings, setSetting } from './settings'
 import { getDatabaseInfo } from './db'
 import {
@@ -28,12 +29,55 @@ import {
 } from './db/repositories/volumes'
 import { getGoal, upsertGoal, deleteGoal } from './db/repositories/goals'
 import {
+  listLore,
+  getLore,
+  createLore,
+  renameLore,
+  setLoreCategory,
+  saveLoreContent,
+  deleteLore
+} from './db/repositories/lore'
+import {
+  listCharacters,
+  getCharacter,
+  createCharacter,
+  renameCharacter,
+  setCharacterFolder,
+  saveCharacterFields,
+  setCharacterImage,
+  deleteCharacter
+} from './db/repositories/characters'
+import {
+  listReaderItems,
+  getReaderItem,
+  createReaderItem,
+  renameReaderItem,
+  setReaderAuthor,
+  setReaderCover,
+  updateReaderLocation,
+  deleteReaderItem
+} from './db/repositories/reader'
+import {
+  importReaderFile,
+  importReaderCover,
+  deleteSourceFile,
+  deleteReaderAssets
+} from './reader'
+import {
   listCheckins,
   snapshotProgress,
   setMood
 } from './db/repositories/checkins'
-import { importCover } from './assets'
-import type { CreateBookInput, UpdateBookInput, CreateChapterOptions, ChapterPlacement } from '@shared/types'
+import { importCover, importCharacterImage, absoluteAssetPath } from './assets'
+import type {
+  CreateBookInput,
+  UpdateBookInput,
+  CreateChapterOptions,
+  ChapterPlacement,
+  CreateLoreOptions,
+  CreateCharacterOptions,
+  ReaderItem
+} from '@shared/types'
 
 export function registerIpcHandlers(): void {
   // App / diagnostics
@@ -119,4 +163,82 @@ export function registerIpcHandlers(): void {
       note?: string | null
     ) => setMood(ownerType, ownerId, date, mood ?? null, note ?? null)
   )
+
+  // Lore
+  ipcMain.handle('lore:list', (_e, bookId: number) => listLore(bookId))
+  ipcMain.handle('lore:get', (_e, id: number) => getLore(id))
+  ipcMain.handle('lore:create', (_e, bookId: number, opts?: CreateLoreOptions) =>
+    createLore(bookId, opts)
+  )
+  ipcMain.handle('lore:rename', (_e, id: number, title: string) => renameLore(id, title))
+  ipcMain.handle('lore:setCategory', (_e, id: number, category: string) =>
+    setLoreCategory(id, category)
+  )
+  ipcMain.handle('lore:saveContent', (_e, id: number, content: string) =>
+    saveLoreContent(id, content)
+  )
+  ipcMain.handle('lore:delete', (_e, id: number) => deleteLore(id))
+
+  // Characters
+  ipcMain.handle('characters:list', (_e, bookId: number) => listCharacters(bookId))
+  ipcMain.handle('characters:get', (_e, id: number) => getCharacter(id))
+  ipcMain.handle('characters:create', (_e, bookId: number, opts?: CreateCharacterOptions) =>
+    createCharacter(bookId, opts)
+  )
+  ipcMain.handle('characters:rename', (_e, id: number, name: string) => renameCharacter(id, name))
+  ipcMain.handle('characters:setFolder', (_e, id: number, folder: string | null) =>
+    setCharacterFolder(id, folder)
+  )
+  ipcMain.handle('characters:saveFields', (_e, id: number, fieldsJson: string) =>
+    saveCharacterFields(id, fieldsJson)
+  )
+  ipcMain.handle('characters:setImage', (_e, id: number, imagePath: string | null) =>
+    setCharacterImage(id, imagePath)
+  )
+  ipcMain.handle('characters:delete', (_e, id: number) => deleteCharacter(id))
+  ipcMain.handle('characters:importImage', () => importCharacterImage())
+
+  // Reader
+  const withAbs = (it: ReaderItem | null): ReaderItem | null =>
+    it ? { ...it, abs_path: absoluteAssetPath(it.file_path) } : null
+
+  ipcMain.handle('reader:list', () => listReaderItems().map((it) => withAbs(it)))
+  ipcMain.handle('reader:get', (_e, id: number) => withAbs(getReaderItem(id)))
+  ipcMain.handle('reader:import', async () => {
+    const f = await importReaderFile()
+    if (!f) return null
+    const item = createReaderItem({
+      title: f.title,
+      format: f.format,
+      filePath: f.relPath,
+      sourcePath: f.sourcePath
+    })
+    return { item: withAbs(item), sourcePath: f.sourcePath }
+  })
+  ipcMain.handle('reader:deleteSource', (_e, path: string) => deleteSourceFile(path))
+  ipcMain.handle('reader:rename', (_e, id: number, title: string) =>
+    withAbs(renameReaderItem(id, title))
+  )
+  ipcMain.handle('reader:setAuthor', (_e, id: number, author: string | null) =>
+    withAbs(setReaderAuthor(id, author))
+  )
+  ipcMain.handle('reader:importCover', async (_e, id: number) => {
+    const cover = await importReaderCover()
+    if (!cover) return withAbs(getReaderItem(id))
+    return withAbs(setReaderCover(id, cover))
+  })
+  ipcMain.handle('reader:setLocation', (_e, id: number, location: string | null) =>
+    withAbs(updateReaderLocation(id, location))
+  )
+  ipcMain.handle('reader:delete', (_e, id: number) => {
+    const row = deleteReaderItem(id)
+    if (row) deleteReaderAssets([row.file_path, row.cover_path])
+    return true
+  })
+  ipcMain.handle('reader:fileData', async (_e, id: number) => {
+    const it = getReaderItem(id)
+    if (!it) return null
+    const buf = await readFile(absoluteAssetPath(it.file_path))
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  })
 }

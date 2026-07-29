@@ -15,8 +15,13 @@ import { randomUUID } from 'node:crypto'
  */
 const SCHEME = 'cypher-asset'
 
-function assetsRoot(): string {
+export function assetsRoot(): string {
   return join(app.getPath('userData'), 'assets')
+}
+
+/** Absolute on-disk path for a stored asset ref (e.g. "reader/x.epub"). */
+export function absoluteAssetPath(rel: string): string {
+  return resolve(assetsRoot(), rel)
 }
 
 const MIME: Record<string, string> = {
@@ -73,4 +78,22 @@ export async function importCover(): Promise<string | null> {
   const name = `${randomUUID()}${ext}`
   copyFileSync(src, join(dir, name))
   return `covers/${name}`
+}
+
+/** Opens a file picker, copies the chosen image into app-data, returns its ref. */
+export async function importCharacterImage(): Promise<string | null> {
+  const result = await dialog.showOpenDialog({
+    title: 'Choose a character image',
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+
+  const src = result.filePaths[0]
+  const dir = join(assetsRoot(), 'characters')
+  mkdirSync(dir, { recursive: true })
+  const ext = extname(src).toLowerCase() || '.png'
+  const name = `${randomUUID()}${ext}`
+  copyFileSync(src, join(dir, name))
+  return `characters/${name}`
 }

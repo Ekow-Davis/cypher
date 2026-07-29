@@ -60,6 +60,7 @@ export const useInsightsStore = defineStore('insights', () => {
     () => checkins.value.find((c) => c.date === todayStr()) ?? null
   )
   const wordsToday = computed(() => today.value?.words_written ?? 0)
+  const deletedToday = computed(() => today.value?.words_deleted ?? 0)
 
   // Consecutive days (ending today, or yesterday if today not yet written) with words.
   const streak = computed(() => {
@@ -74,15 +75,16 @@ export const useInsightsStore = defineStore('insights', () => {
     return count
   })
 
-  // Last `days` days as { date, words } for the activity strip (oldest -> newest).
-  function recentActivity(days = 14): { date: string; words: number }[] {
-    const byDate = new Map(checkins.value.map((c) => [c.date, c.words_written]))
-    const out: { date: string; words: number }[] = []
+  // Last `days` days as { date, words, deleted } for the activity strip (oldest -> newest).
+  function recentActivity(days = 14): { date: string; words: number; deleted: number }[] {
+    const byDate = new Map(checkins.value.map((c) => [c.date, c]))
+    const out: { date: string; words: number; deleted: number }[] = []
     const cursor = new Date()
     cursor.setDate(cursor.getDate() - (days - 1))
     for (let i = 0; i < days; i++) {
       const ds = ymd(cursor)
-      out.push({ date: ds, words: byDate.get(ds) ?? 0 })
+      const c = byDate.get(ds)
+      out.push({ date: ds, words: c?.words_written ?? 0, deleted: c?.words_deleted ?? 0 })
       cursor.setDate(cursor.getDate() + 1)
     }
     return out
@@ -99,6 +101,7 @@ export const useInsightsStore = defineStore('insights', () => {
     saveMood,
     today,
     wordsToday,
+    deletedToday,
     streak,
     recentActivity
   }

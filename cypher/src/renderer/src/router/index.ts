@@ -44,6 +44,17 @@ const routes: RouteRecordRaw[] = [
     meta: { themeDomain: 'book' }
   },
   {
+    path: '/reader',
+    name: 'reader',
+    component: () => import('@/domains/reader/ReaderHome.vue'),
+    meta: { title: 'Reader', privacy: 'public' }
+  },
+  {
+    path: '/reader/:id',
+    name: 'reader-item',
+    component: () => import('@/domains/reader/ReaderView.vue')
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('@/views/SettingsView.vue'),

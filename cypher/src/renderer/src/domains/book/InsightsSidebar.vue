@@ -89,6 +89,18 @@ const perDay = computed(() => {
 // ----- today / activity -----
 const activity = computed(() => insights.recentActivity(14))
 const activityMax = computed(() => Math.max(1, ...activity.value.map((a) => a.words)))
+type Day = { date: string; words: number; deleted: number }
+const hovered = ref<Day | null>(null)
+
+function fmtDate(ds: string): string {
+  return new Date(ds + 'T00:00:00').toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric'
+  })
+}
+function barHeight(a: Day): string {
+  return Math.max(8, (a.words / activityMax.value) * 100) + '%'
+}
 
 // ----- mood -----
 const moods = [
@@ -253,8 +265,17 @@ function analyze(): void {
         <div v-if="open.today" class="px-3 pb-3">
           <div class="mb-3 flex items-center justify-between">
             <div>
-              <div class="text-2xl font-bold tabular-nums">+{{ insights.wordsToday.toLocaleString() }}</div>
-              <div class="text-[10px] text-ink-dim">words today</div>
+              <div class="flex items-baseline gap-2">
+                <span class="text-2xl font-bold tabular-nums text-accent"
+                  >+{{ insights.wordsToday.toLocaleString() }}</span
+                >
+                <span
+                  v-if="insights.deletedToday > 0"
+                  class="text-sm font-semibold tabular-nums text-red-400"
+                  >−{{ insights.deletedToday.toLocaleString() }}</span
+                >
+              </div>
+              <div class="text-[10px] text-ink-dim">written / deleted today</div>
             </div>
             <div class="text-right">
               <div class="flex items-center gap-1 text-2xl font-bold tabular-nums">
@@ -263,17 +284,38 @@ function analyze(): void {
               <div class="text-[10px] text-ink-dim">day streak</div>
             </div>
           </div>
-          <div class="flex h-10 items-end gap-0.5">
+
+          <!-- hover readout -->
+          <div class="mb-1 h-4 text-[11px] tabular-nums">
+            <template v-if="hovered">
+              <span class="text-ink-dim">{{ fmtDate(hovered.date) }}</span>
+              <span class="ml-2 text-accent">+{{ hovered.words.toLocaleString() }}</span>
+              <span v-if="hovered.deleted > 0" class="ml-1 text-red-400"
+                >−{{ hovered.deleted.toLocaleString() }}</span
+              >
+            </template>
+          </div>
+
+          <!-- activity strip -->
+          <div class="flex h-12 items-end gap-0.5">
             <div
               v-for="a in activity"
               :key="a.date"
-              class="flex-1 rounded-sm"
-              :class="a.words > 0 ? 'bg-accent' : 'bg-surface-2'"
-              :style="{ height: Math.max(8, (a.words / activityMax) * 100) + '%' }"
-              :title="`${a.date}: ${a.words} words`"
+              class="flex-1 cursor-default rounded-sm transition-colors"
+              :class="[
+                a.words > 0 ? 'bg-accent' : 'bg-surface-2',
+                a.deleted > 0 ? 'border-b-2 border-red-500' : '',
+                hovered?.date === a.date ? 'opacity-70' : ''
+              ]"
+              :style="{ height: barHeight(a) }"
+              @mouseenter="hovered = a"
+              @mouseleave="hovered = null"
             />
           </div>
-          <div class="mt-1 text-[10px] text-ink-dim">last 14 days</div>
+          <div class="mt-1 flex justify-between text-[10px] text-ink-dim">
+            <span>{{ activity.length ? fmtDate(activity[0].date) : '' }}</span>
+            <span>Today</span>
+          </div>
         </div>
       </section>
 
