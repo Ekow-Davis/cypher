@@ -1,6 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Chapter, Volume, ChapterPlacement } from '@shared/types'
+import type {
+  Chapter,
+  Volume,
+  ChapterPlacement,
+  UpdateChapterMetaInput
+} from '@shared/types'
 
 export const useChaptersStore = defineStore('chapters', () => {
   const chapters = ref<Chapter[]>([])
@@ -41,6 +46,11 @@ export const useChaptersStore = defineStore('chapters', () => {
     if (updated) replaceChapter(updated)
   }
 
+  async function saveMeta(id: number, patch: UpdateChapterMetaInput): Promise<void> {
+    const updated = await window.cypher.chapters.saveMeta(id, patch)
+    if (updated) replaceChapter(updated)
+  }
+
   async function remove(id: number): Promise<void> {
     await window.cypher.chapters.remove(id)
     const wasActive = activeId.value === id
@@ -63,9 +73,16 @@ export const useChaptersStore = defineStore('chapters', () => {
     activeId.value = id
   }
 
+  /**
+   * Updates the existing object in place rather than swapping in a new one.
+   * ChapterList holds its own grouped arrays that only rebuild on structural
+   * changes (so drag-and-drop isn't clobbered); those arrays hold references to
+   * these objects, so replacing an object would leave the sidebar showing a
+   * stale copy until something forced a rebuild.
+   */
   function replaceChapter(updated: Chapter): void {
-    const i = chapters.value.findIndex((c) => c.id === updated.id)
-    if (i !== -1) chapters.value[i] = updated
+    const existing = chapters.value.find((c) => c.id === updated.id)
+    if (existing) Object.assign(existing, updated)
   }
 
   // ----- volumes -----
@@ -119,6 +136,7 @@ export const useChaptersStore = defineStore('chapters', () => {
     add,
     rename,
     saveContent,
+    saveMeta,
     remove,
     applyOrder,
     setActive,

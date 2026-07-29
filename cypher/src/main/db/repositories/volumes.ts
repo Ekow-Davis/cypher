@@ -41,7 +41,7 @@ export function deleteVolume(id: number, deleteChapters = false): void {
   const db = getDb()
   if (deleteChapters) {
     const tx = db.transaction(() => {
-      db.prepare('DELETE FROM chapters WHERE volume_id = ?').run(id)
+      db.prepare("UPDATE chapters SET deleted_at = datetime('now') WHERE volume_id = ?").run(id)
       db.prepare('DELETE FROM volumes WHERE id = ?').run(id)
     })
     tx()

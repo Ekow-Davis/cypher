@@ -28,6 +28,8 @@ export interface UpdateBookInput {
   cover_path?: string | null
 }
 
+export type ChapterStatus = 'outline' | 'draft' | 'revised' | 'final'
+
 export interface Chapter {
   id: number
   book_id: number
@@ -37,6 +39,15 @@ export interface Chapter {
   word_count: number
   sort_order: number
   updated_at: string
+  synopsis: string
+  status: ChapterStatus
+  pov_character_id: number | null
+}
+
+export interface UpdateChapterMetaInput {
+  synopsis?: string
+  status?: ChapterStatus
+  pov_character_id?: number | null
 }
 
 export interface Volume {
@@ -160,4 +171,38 @@ export interface UpdateNoteInput {
   title?: string
   content?: string
   color?: string | null
+}
+
+export interface BackupInfo {
+  name: string
+  path: string
+  size: number
+  createdAt: string
+}
+
+export type ArchiveCadence = 'off' | 'weekly' | 'monthly'
+
+export type TrashKind = 'book' | 'chapter' | 'lore' | 'character'
+
+export interface TrashItem {
+  kind: TrashKind
+  id: number
+  title: string
+  context: string | null
+  deleted_at: string
+}
+
+export type ExportFormat = 'docx' | 'pdf' | 'epub'
+
+export interface ExportOptions {
+  titlePage: boolean
+  volumeHeadings: boolean
+  includeSynopsis: boolean
+}
+
+export interface ExportResult {
+  path: string | null
+  chapters: number
+  cancelled?: boolean
+  error?: string
 }

@@ -1,7 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Settings2, PanelRight, BookText, Library, Users } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  Settings2,
+  PanelRight,
+  BookText,
+  Library,
+  Users,
+  Maximize2,
+  Minimize2,
+  Download
+} from 'lucide-vue-next'
 import { useBooksStore } from '@/stores/books'
 import { useChaptersStore } from '@/stores/chapters'
 import { useInsightsStore } from '@/stores/insights'
@@ -9,11 +19,13 @@ import { useLoreStore } from '@/stores/lore'
 import { useCharactersStore } from '@/stores/characters'
 import { useBookUiStore } from '@/stores/bookUi'
 import { useNotesStore } from '@/stores/notes'
+import { useAppStore } from '@/stores/app'
 import ChapterList from './ChapterList.vue'
 import ChapterEditor from './ChapterEditor.vue'
 import InsightsSidebar from './InsightsSidebar.vue'
 import LoreView from './LoreView.vue'
 import CharacterView from './CharacterView.vue'
+import ExportDialog from './ExportDialog.vue'
 import type { Book } from '@shared/types'
 
 const route = useRoute()
@@ -25,12 +37,24 @@ const lore = useLoreStore()
 const characters = useCharactersStore()
 const ui = useBookUiStore()
 const notes = useNotesStore()
+const app = useAppStore()
 
 const book = ref<Book | null>(null)
 const showInsights = ref(true)
 const showLoreSidebar = ref(true)
+const showExport = ref(false)
+
+function onKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape' && app.focusMode) app.setFocus(false)
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  app.setFocus(false)
+})
 
 onMounted(async () => {
+  window.addEventListener('keydown', onKey)
   ui.setTab('manuscript')
   const id = Number(route.params.id)
   book.value = await booksStore.get(id)
@@ -46,7 +70,10 @@ onMounted(async () => {
 
 <template>
   <div class="flex h-full flex-col">
-    <header class="flex items-center gap-3 border-b border-border bg-surface px-5 py-3">
+    <header
+      v-if="!app.focusMode"
+      class="flex items-center gap-3 border-b border-border bg-surface px-5 py-3"
+    >
       <button
         class="flex items-center gap-1 text-sm text-ink-dim transition-colors hover:text-ink"
         @click="router.push('/book')"
@@ -83,7 +110,15 @@ onMounted(async () => {
       <!-- right-sidebar toggle (per tab) -->
       <button
         v-if="ui.tab === 'manuscript'"
-        class="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors"
+        class="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-ink-dim transition-colors hover:text-ink"
+        title="Focus mode (Esc to exit)"
+        @click="app.setFocus(true)"
+      >
+        <Maximize2 :size="16" /> Focus
+      </button>
+      <button
+        v-if="ui.tab === 'manuscript'"
+        class="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors"
         :class="showInsights ? 'text-accent' : 'text-ink-dim hover:text-ink'"
         title="Toggle Goals & Insights"
         @click="showInsights = !showInsights"
@@ -103,6 +138,13 @@ onMounted(async () => {
       <button
         class="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-ink-dim transition-colors hover:text-ink"
         :class="ui.tab === 'characters' ? 'ml-auto' : ''"
+        title="Export book"
+        @click="showExport = true"
+      >
+        <Download :size="16" /> Export
+      </button>
+      <button
+        class="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-ink-dim transition-colors hover:text-ink"
         @click="router.push(`/book/${route.params.id}/settings`)"
       >
         <Settings2 :size="16" /> Settings
@@ -111,14 +153,14 @@ onMounted(async () => {
 
     <!-- MANUSCRIPT -->
     <div v-if="ui.tab === 'manuscript'" class="flex flex-1 overflow-hidden">
-      <ChapterList />
+      <ChapterList v-if="!app.focusMode" />
       <main class="flex-1 overflow-hidden">
         <ChapterEditor v-if="chapters.active" :chapter="chapters.active" />
         <div v-else class="flex h-full items-center justify-center text-ink-dim">
           No chapter selected.
         </div>
       </main>
-      <InsightsSidebar v-if="showInsights" />
+      <InsightsSidebar v-if="showInsights && !app.focusMode" />
     </div>
 
     <!-- LORE -->
@@ -126,5 +168,17 @@ onMounted(async () => {
 
     <!-- CHARACTERS -->
     <CharacterView v-else-if="ui.tab === 'characters'" />
+
+    <ExportDialog v-if="showExport" :book-id="Number(route.params.id)" @close="showExport = false" />
+
+    <!-- focus-mode exit -->
+    <button
+      v-if="app.focusMode"
+      class="fixed bottom-5 right-5 z-40 flex items-center gap-1.5 rounded-full border border-border bg-surface/90 px-3 py-2 text-xs text-ink-dim opacity-30 shadow-lg transition-opacity hover:opacity-100"
+      title="Exit focus mode (Esc)"
+      @click="app.setFocus(false)"
+    >
+      <Minimize2 :size="14" /> Exit focus
+    </button>
   </div>
 </template>

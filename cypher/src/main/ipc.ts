@@ -17,6 +17,7 @@ import {
   ensureFirstChapter,
   renameChapter,
   saveChapterContent,
+  updateChapterMeta,
   applyChapterOrder,
   deleteChapter
 } from './db/repositories/chapters'
@@ -29,6 +30,12 @@ import {
 } from './db/repositories/volumes'
 import { getGoal, upsertGoal, deleteGoal } from './db/repositories/goals'
 import { listNotes, createNote, updateNote, deleteNote } from './db/repositories/notes'
+import {
+  listTrash,
+  restoreTrashItem,
+  purgeTrashItem,
+  emptyTrash
+} from './db/repositories/trash'
 import {
   listLore,
   getLore,
@@ -70,6 +77,17 @@ import {
   setMood
 } from './db/repositories/checkins'
 import { importCover, importCharacterImage, absoluteAssetPath } from './assets'
+import { exportBook } from './export'
+import {
+  listBackups,
+  createBackup,
+  deleteBackup,
+  restoreBackup,
+  revealBackups,
+  exportArchive,
+  archiveDue,
+  snoozeArchive
+} from './backup'
 import type {
   CreateBookInput,
   UpdateBookInput,
@@ -78,7 +96,11 @@ import type {
   CreateLoreOptions,
   CreateCharacterOptions,
   ReaderItem,
-  UpdateNoteInput
+  UpdateNoteInput,
+  TrashKind,
+  UpdateChapterMetaInput,
+  ExportFormat,
+  ExportOptions
 } from '@shared/types'
 
 export function registerIpcHandlers(): void {
@@ -111,6 +133,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('chapters:rename', (_e, id: number, title: string) => renameChapter(id, title))
   ipcMain.handle('chapters:saveContent', (_e, id: number, content: string, wordCount: number) =>
     saveChapterContent(id, content, wordCount)
+  )
+  ipcMain.handle('chapters:saveMeta', (_e, id: number, patch: UpdateChapterMetaInput) =>
+    updateChapterMeta(id, patch)
   )
   ipcMain.handle('chapters:applyOrder', (_e, items: ChapterPlacement[]) => applyChapterOrder(items))
   ipcMain.handle('chapters:delete', (_e, id: number) => deleteChapter(id))
@@ -237,6 +262,29 @@ export function registerIpcHandlers(): void {
     if (row) deleteReaderAssets([row.file_path, row.cover_path])
     return true
   })
+  // Export
+  ipcMain.handle(
+    'export:book',
+    (_e, bookId: number, format: ExportFormat, options: ExportOptions) =>
+      exportBook(bookId, format, options)
+  )
+
+  // Trash
+  ipcMain.handle('trash:list', () => listTrash())
+  ipcMain.handle('trash:restore', (_e, kind: TrashKind, id: number) => restoreTrashItem(kind, id))
+  ipcMain.handle('trash:purge', (_e, kind: TrashKind, id: number) => purgeTrashItem(kind, id))
+  ipcMain.handle('trash:empty', () => emptyTrash())
+
+  // Backups & archive
+  ipcMain.handle('backup:list', () => listBackups())
+  ipcMain.handle('backup:create', () => createBackup())
+  ipcMain.handle('backup:delete', (_e, path: string) => deleteBackup(path))
+  ipcMain.handle('backup:restore', (_e, path: string) => restoreBackup(path))
+  ipcMain.handle('backup:reveal', () => revealBackups())
+  ipcMain.handle('backup:archive', () => exportArchive())
+  ipcMain.handle('backup:archiveDue', () => archiveDue())
+  ipcMain.handle('backup:snoozeArchive', (_e, days?: number) => snoozeArchive(days ?? 3))
+
   // Notes
   ipcMain.handle('notes:list', (_e, ownerType: string, ownerId: number) =>
     listNotes(ownerType, ownerId)

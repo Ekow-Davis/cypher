@@ -1,11 +1,16 @@
 import { getDb } from '../index'
-import type { Chapter, ChapterPlacement, CreateChapterOptions } from '@shared/types'
+import type {
+  Chapter,
+  ChapterPlacement,
+  CreateChapterOptions,
+  UpdateChapterMetaInput
+} from '@shared/types'
 
 /** Chapters repository. */
 
 export function listChapters(bookId: number): Chapter[] {
   return getDb()
-    .prepare('SELECT * FROM chapters WHERE book_id = ? ORDER BY sort_order ASC, id ASC')
+    .prepare('SELECT * FROM chapters WHERE book_id = ? AND deleted_at IS NULL ORDER BY sort_order ASC, id ASC')
     .all(bookId) as Chapter[]
 }
 
@@ -17,13 +22,15 @@ export function createChapter(bookId: number, opts?: CreateChapterOptions): Chap
   const db = getDb()
   const volumeId = opts?.volumeId ?? null
   const bookCount = (
-    db.prepare('SELECT COUNT(*) AS c FROM chapters WHERE book_id = ?').get(bookId) as { c: number }
+    db
+      .prepare('SELECT COUNT(*) AS c FROM chapters WHERE book_id = ? AND deleted_at IS NULL')
+      .get(bookId) as { c: number }
   ).c
   // append within the target group (volume or unsorted)
   const maxOrder = (
     db
       .prepare(
-        'SELECT COALESCE(MAX(sort_order), -1) AS m FROM chapters WHERE book_id = ? AND volume_id IS ?'
+        'SELECT COALESCE(MAX(sort_order), -1) AS m FROM chapters WHERE book_id = ? AND volume_id IS ? AND deleted_at IS NULL'
       )
       .get(bookId, volumeId) as { m: number }
   ).m
@@ -56,6 +63,22 @@ export function saveChapterContent(id: number, content: string, wordCount: numbe
   return getChapter(id)
 }
 
+const META_FIELDS = ['synopsis', 'status', 'pov_character_id'] as const
+
+/** Updates chapter metadata. Only whitelisted columns can be written. */
+export function updateChapterMeta(id: number, patch: UpdateChapterMetaInput): Chapter | null {
+  const entries = Object.entries(patch).filter(([k]) =>
+    (META_FIELDS as readonly string[]).includes(k)
+  )
+  if (entries.length === 0) return getChapter(id)
+  const sets = entries.map(([k]) => `${k} = ?`).join(', ')
+  const values = entries.map(([, v]) => v as string | number | null)
+  getDb()
+    .prepare(`UPDATE chapters SET ${sets} WHERE id = ?`)
+    .run(...values, id)
+  return getChapter(id)
+}
+
 /** Persists a full re-placement: volume assignment + order, in one transaction. */
 export function applyChapterOrder(items: ChapterPlacement[]): void {
   const db = getDb()
@@ -66,6 +89,7 @@ export function applyChapterOrder(items: ChapterPlacement[]): void {
   tx(items)
 }
 
+/** Soft delete — the chapter moves to the trash and can be restored. */
 export function deleteChapter(id: number): void {
-  getDb().prepare('DELETE FROM chapters WHERE id = ?').run(id)
+  getDb().prepare("UPDATE chapters SET deleted_at = datetime('now') WHERE id = ?").run(id)
 }

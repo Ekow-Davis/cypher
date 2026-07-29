@@ -6,7 +6,7 @@ import type { LoreEntry, CreateLoreOptions } from '@shared/types'
 export function listLore(bookId: number): LoreEntry[] {
   return getDb()
     .prepare(
-      'SELECT * FROM lore_entries WHERE book_id = ? ORDER BY category ASC, sort_order ASC, id ASC'
+      'SELECT * FROM lore_entries WHERE book_id = ? AND deleted_at IS NULL ORDER BY category ASC, sort_order ASC, id ASC'
     )
     .all(bookId) as LoreEntry[]
 }
@@ -18,7 +18,7 @@ export function getLore(id: number): LoreEntry | null {
 function appendOrder(bookId: number, category: string): number {
   const row = getDb()
     .prepare(
-      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM lore_entries WHERE book_id = ? AND category = ?'
+      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM lore_entries WHERE book_id = ? AND category = ? AND deleted_at IS NULL'
     )
     .get(bookId, category) as { m: number }
   return row.m + 1
@@ -59,6 +59,7 @@ export function saveLoreContent(id: number, content: string): LoreEntry | null {
   return getLore(id)
 }
 
+/** Soft delete — the entry moves to the trash and can be restored. */
 export function deleteLore(id: number): void {
-  getDb().prepare('DELETE FROM lore_entries WHERE id = ?').run(id)
+  getDb().prepare("UPDATE lore_entries SET deleted_at = datetime('now') WHERE id = ?").run(id)
 }

@@ -6,6 +6,7 @@ import type {
   Chapter,
   CreateChapterOptions,
   ChapterPlacement,
+  UpdateChapterMetaInput,
   Volume,
   Goal,
   Checkin,
@@ -16,7 +17,13 @@ import type {
   ReaderItem,
   ReaderImportResult,
   Note,
-  UpdateNoteInput
+  UpdateNoteInput,
+  BackupInfo,
+  TrashItem,
+  TrashKind,
+  ExportFormat,
+  ExportOptions,
+  ExportResult
 } from '@shared/types'
 
 const cypher = {
@@ -59,6 +66,8 @@ const cypher = {
       ipcRenderer.invoke('chapters:rename', id, title),
     saveContent: (id: number, content: string, wordCount: number): Promise<Chapter | null> =>
       ipcRenderer.invoke('chapters:saveContent', id, content, wordCount),
+    saveMeta: (id: number, patch: UpdateChapterMetaInput): Promise<Chapter | null> =>
+      ipcRenderer.invoke('chapters:saveMeta', id, patch),
     applyOrder: (items: ChapterPlacement[]): Promise<void> =>
       ipcRenderer.invoke('chapters:applyOrder', items),
     remove: (id: number): Promise<void> => ipcRenderer.invoke('chapters:delete', id)
@@ -141,6 +150,32 @@ const cypher = {
       ipcRenderer.invoke('characters:setImage', id, imagePath),
     remove: (id: number): Promise<void> => ipcRenderer.invoke('characters:delete', id),
     importImage: (): Promise<string | null> => ipcRenderer.invoke('characters:importImage')
+  },
+
+  exporter: {
+    book: (bookId: number, format: ExportFormat, options: ExportOptions): Promise<ExportResult> =>
+      ipcRenderer.invoke('export:book', bookId, format, options)
+  },
+
+  trash: {
+    list: (): Promise<TrashItem[]> => ipcRenderer.invoke('trash:list'),
+    restore: (kind: TrashKind, id: number): Promise<boolean> =>
+      ipcRenderer.invoke('trash:restore', kind, id),
+    purge: (kind: TrashKind, id: number): Promise<boolean> =>
+      ipcRenderer.invoke('trash:purge', kind, id),
+    empty: (): Promise<number> => ipcRenderer.invoke('trash:empty')
+  },
+
+  backup: {
+    list: (): Promise<BackupInfo[]> => ipcRenderer.invoke('backup:list'),
+    create: (): Promise<BackupInfo> => ipcRenderer.invoke('backup:create'),
+    remove: (path: string): Promise<boolean> => ipcRenderer.invoke('backup:delete', path),
+    restore: (path: string): Promise<boolean> => ipcRenderer.invoke('backup:restore', path),
+    reveal: (): Promise<void> => ipcRenderer.invoke('backup:reveal'),
+    archive: (): Promise<string | null> => ipcRenderer.invoke('backup:archive'),
+    archiveDue: (): Promise<boolean> => ipcRenderer.invoke('backup:archiveDue'),
+    snoozeArchive: (days?: number): Promise<void> =>
+      ipcRenderer.invoke('backup:snoozeArchive', days)
   },
 
   notes: {

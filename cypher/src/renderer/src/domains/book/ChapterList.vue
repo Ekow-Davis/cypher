@@ -13,10 +13,20 @@ import {
 } from 'lucide-vue-next'
 import { useChaptersStore } from '@/stores/chapters'
 import ManuscriptSearch from './ManuscriptSearch.vue'
-import type { Chapter, Volume, ChapterPlacement } from '@shared/types'
+import type { Chapter, Volume, ChapterPlacement, ChapterStatus } from '@shared/types'
 
 const store = useChaptersStore()
 const searching = ref(false)
+
+const STATUS_DOT: Record<ChapterStatus, string> = {
+  outline: 'bg-slate-400',
+  draft: 'bg-amber-400',
+  revised: 'bg-sky-400',
+  final: 'bg-emerald-400'
+}
+function dotFor(c: Chapter): string {
+  return STATUS_DOT[(c.status as ChapterStatus) ?? 'draft'] ?? 'bg-amber-400'
+}
 
 interface Group {
   volume: Volume
@@ -216,7 +226,10 @@ async function confirmDeleteVolume(): Promise<void> {
             <span class="w-4 shrink-0 text-[11px] text-ink-dim">{{ i + 1 }}</span>
             <div class="min-w-0 flex-1">
               <span class="block truncate text-sm">{{ ch.title }}</span>
-              <span class="block text-[10px] text-ink-dim">{{ ch.word_count.toLocaleString() }} words</span>
+              <span class="flex items-center gap-1 text-[10px] text-ink-dim">
+                <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dotFor(ch)" :title="ch.status" />
+                {{ ch.word_count.toLocaleString() }} words
+              </span>
             </div>
             <button
               class="shrink-0 rounded p-1 text-ink-dim opacity-0 transition-opacity hover:text-red-400 group-hover/row:opacity-100"
@@ -263,7 +276,10 @@ async function confirmDeleteVolume(): Promise<void> {
             <span class="w-4 shrink-0 text-[11px] text-ink-dim">{{ i + 1 }}</span>
             <div class="min-w-0 flex-1">
               <span class="block truncate text-sm">{{ ch.title }}</span>
-              <span class="block text-[10px] text-ink-dim">{{ ch.word_count.toLocaleString() }} words</span>
+              <span class="flex items-center gap-1 text-[10px] text-ink-dim">
+                <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dotFor(ch)" :title="ch.status" />
+                {{ ch.word_count.toLocaleString() }} words
+              </span>
             </div>
             <button
               class="shrink-0 rounded p-1 text-ink-dim opacity-0 transition-opacity hover:text-red-400 group-hover/row:opacity-100"

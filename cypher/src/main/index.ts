@@ -2,6 +2,8 @@ import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { registerIpcHandlers } from './ipc'
 import { initDatabase, closeDatabase } from './db'
+import { startBackupScheduler, stopBackupScheduler } from './backup'
+import { purgeExpiredTrash } from './db/repositories/trash'
 import { registerAssetSchemePrivileged, registerAssetProtocol } from './assets'
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
@@ -47,6 +49,13 @@ app.whenReady().then(() => {
   initDatabase()
   registerAssetProtocol()
   registerIpcHandlers()
+  startBackupScheduler()
+  try {
+    const purged = purgeExpiredTrash()
+    if (purged > 0) console.log(`[trash] purged ${purged} expired item(s)`)
+  } catch (e) {
+    console.error('[trash] purge failed:', e)
+  }
   createMainWindow()
 
   app.on('activate', () => {
@@ -59,5 +68,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+  stopBackupScheduler()
   closeDatabase()
 })

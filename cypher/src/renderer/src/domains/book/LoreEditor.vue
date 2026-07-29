@@ -4,6 +4,7 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import { createCharacterMention, mentionClickHandler } from '@/lib/characterMention'
 import { useBookUiStore } from '@/stores/bookUi'
+import { usePreferencesStore } from '@/stores/preferences'
 import {
   Bold,
   Italic,
@@ -20,6 +21,7 @@ import type { LoreEntry } from '@shared/types'
 const props = defineProps<{ entry: LoreEntry | null }>()
 const store = useLoreStore()
 const bookUi = useBookUiStore()
+const prefs = usePreferencesStore()
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved'
 const status = ref<SaveStatus>('saved')
@@ -49,7 +51,7 @@ const editor = useEditor({
 
 function scheduleSave(): void {
   if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => void saveNow(), 600)
+  saveTimer = setTimeout(() => void saveNow(), prefs.autosaveMs)
 }
 
 async function saveNow(): Promise<void> {
@@ -112,6 +114,15 @@ async function onCategoryCommit(): Promise<void> {
     await store.setCategory(props.entry.id, next)
   }
 }
+
+watch(
+  () => [editor.value, prefs.spellcheck] as const,
+  ([ed, on]) => {
+    const dom = (ed as { view?: { dom?: HTMLElement } } | undefined)?.view?.dom
+    if (dom) dom.setAttribute('spellcheck', String(on))
+  },
+  { immediate: true }
+)
 
 onBeforeUnmount(() => {
   if (saveTimer) clearTimeout(saveTimer)

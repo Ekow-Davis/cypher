@@ -213,3 +213,31 @@ export function migration006(db: Database): void {
     ALTER TABLE notes ADD COLUMN color TEXT;
   `)
 }
+
+/**
+ * Migration 007 — trash. Content tables gain a deleted_at stamp so removing a
+ * chapter, entry, character, or book hides it and can be undone, instead of
+ * destroying it the instant the button is clicked.
+ */
+export function migration007(db: Database): void {
+  db.exec(`
+    ALTER TABLE books ADD COLUMN deleted_at TEXT;
+    ALTER TABLE chapters ADD COLUMN deleted_at TEXT;
+    ALTER TABLE lore_entries ADD COLUMN deleted_at TEXT;
+    ALTER TABLE characters ADD COLUMN deleted_at TEXT;
+  `)
+}
+
+/**
+ * Migration 008 — chapter metadata: a synopsis, a revision status, and an
+ * optional POV character. POV is a real reference, so renaming a character
+ * keeps the link and deleting one clears it rather than orphaning an id.
+ */
+export function migration008(db: Database): void {
+  db.exec(`
+    ALTER TABLE chapters ADD COLUMN synopsis TEXT NOT NULL DEFAULT '';
+    ALTER TABLE chapters ADD COLUMN status TEXT NOT NULL DEFAULT 'draft';
+    ALTER TABLE chapters ADD COLUMN pov_character_id INTEGER
+      REFERENCES characters(id) ON DELETE SET NULL;
+  `)
+}

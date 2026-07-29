@@ -16,6 +16,7 @@ import {
 import { useChaptersStore } from '@/stores/chapters'
 import { useInsightsStore } from '@/stores/insights'
 import PinnedNotes from './PinnedNotes.vue'
+import WritingCalendar from './WritingCalendar.vue'
 import { extractPlainText, wordFrequency, phraseFrequency, type FreqItem } from '@/lib/textStats'
 
 const chaptersStore = useChaptersStore()
@@ -87,21 +88,6 @@ const perDay = computed(() => {
   return Math.ceil(wordsRemaining.value / daysLeft.value)
 })
 
-// ----- today / activity -----
-const activity = computed(() => insights.recentActivity(14))
-const activityMax = computed(() => Math.max(1, ...activity.value.map((a) => a.words)))
-type Day = { date: string; words: number; deleted: number }
-const hovered = ref<Day | null>(null)
-
-function fmtDate(ds: string): string {
-  return new Date(ds + 'T00:00:00').toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric'
-  })
-}
-function barHeight(a: Day): string {
-  return Math.max(8, (a.words / activityMax.value) * 100) + '%'
-}
 
 // ----- mood -----
 const moods = [
@@ -286,37 +272,6 @@ function analyze(): void {
             </div>
           </div>
 
-          <!-- hover readout -->
-          <div class="mb-1 h-4 text-[11px] tabular-nums">
-            <template v-if="hovered">
-              <span class="text-ink-dim">{{ fmtDate(hovered.date) }}</span>
-              <span class="ml-2 text-accent">+{{ hovered.words.toLocaleString() }}</span>
-              <span v-if="hovered.deleted > 0" class="ml-1 text-red-400"
-                >−{{ hovered.deleted.toLocaleString() }}</span
-              >
-            </template>
-          </div>
-
-          <!-- activity strip -->
-          <div class="flex h-12 items-end gap-0.5">
-            <div
-              v-for="a in activity"
-              :key="a.date"
-              class="flex-1 cursor-default rounded-sm transition-colors"
-              :class="[
-                a.words > 0 ? 'bg-accent' : 'bg-surface-2',
-                a.deleted > 0 ? 'border-b-2 border-red-500' : '',
-                hovered?.date === a.date ? 'opacity-70' : ''
-              ]"
-              :style="{ height: barHeight(a) }"
-              @mouseenter="hovered = a"
-              @mouseleave="hovered = null"
-            />
-          </div>
-          <div class="mt-1 flex justify-between text-[10px] text-ink-dim">
-            <span>{{ activity.length ? fmtDate(activity[0].date) : '' }}</span>
-            <span>Today</span>
-          </div>
         </div>
       </section>
 
@@ -356,6 +311,9 @@ function analyze(): void {
           />
         </div>
       </section>
+
+      <!-- WRITING CALENDAR -->
+      <WritingCalendar />
 
       <!-- PINNED NOTES -->
       <PinnedNotes />

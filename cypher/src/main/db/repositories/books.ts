@@ -12,8 +12,8 @@ const UPDATABLE = ['title', 'subtitle', 'synopsis', 'genre', 'status', 'cover_pa
 
 export function listBooks(includeArchived = false): Book[] {
   const sql = includeArchived
-    ? 'SELECT * FROM books ORDER BY created_at DESC'
-    : 'SELECT * FROM books WHERE archived = 0 ORDER BY created_at DESC'
+    ? 'SELECT * FROM books WHERE deleted_at IS NULL ORDER BY created_at DESC'
+    : 'SELECT * FROM books WHERE deleted_at IS NULL AND archived = 0 ORDER BY created_at DESC'
   return getDb().prepare(sql).all() as Book[]
 }
 
@@ -47,6 +47,7 @@ export function archiveBook(id: number, archived: boolean): Book | null {
   return getBook(id)
 }
 
+/** Soft delete — the book moves to the trash and can be restored. */
 export function deleteBook(id: number): void {
-  getDb().prepare('DELETE FROM books WHERE id = ?').run(id)
+  getDb().prepare("UPDATE books SET deleted_at = datetime('now') WHERE id = ?").run(id)
 }

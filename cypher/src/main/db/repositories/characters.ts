@@ -7,7 +7,7 @@ import { defaultCharacterSheet } from '../../../shared/characterTemplate'
 export function listCharacters(bookId: number): Character[] {
   return getDb()
     .prepare(
-      'SELECT * FROM characters WHERE book_id = ? ORDER BY name COLLATE NOCASE ASC, id ASC'
+      'SELECT * FROM characters WHERE book_id = ? AND deleted_at IS NULL ORDER BY name COLLATE NOCASE ASC, id ASC'
     )
     .all(bookId) as Character[]
 }
@@ -49,6 +49,7 @@ export function setCharacterImage(id: number, imagePath: string | null): Charact
   return getCharacter(id)
 }
 
+/** Soft delete — the character moves to the trash and can be restored. */
 export function deleteCharacter(id: number): void {
-  getDb().prepare('DELETE FROM characters WHERE id = ?').run(id)
+  getDb().prepare("UPDATE characters SET deleted_at = datetime('now') WHERE id = ?").run(id)
 }
