@@ -83,6 +83,23 @@ export const useCharactersStore = defineStore('characters', () => {
     activeId.value = created.id
   }
 
+  /** Creates a character with a given name without stealing the current selection. */
+  async function createNamed(name: string): Promise<Character | undefined> {
+    if (bookId.value == null) {
+      lastError.value = 'No book loaded yet — reopen the book and try again.'
+      return undefined
+    }
+    const created = await guard('Create character', () =>
+      window.cypher.characters.create(bookId.value!, { name })
+    )
+    if (!created) return undefined
+    const fresh = await guard('Load characters', () =>
+      window.cypher.characters.list(bookId.value!)
+    )
+    if (fresh) characters.value = fresh
+    return created
+  }
+
   async function rename(id: number, name: string): Promise<void> {
     const updated = await guard('Rename character', () =>
       window.cypher.characters.rename(id, name)
@@ -152,6 +169,7 @@ export const useCharactersStore = defineStore('characters', () => {
     folderNames,
     loadForBook,
     add,
+    createNamed,
     rename,
     setFolder,
     saveFields,

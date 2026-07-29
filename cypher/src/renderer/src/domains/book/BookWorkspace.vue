@@ -7,6 +7,7 @@ import { useChaptersStore } from '@/stores/chapters'
 import { useInsightsStore } from '@/stores/insights'
 import { useLoreStore } from '@/stores/lore'
 import { useCharactersStore } from '@/stores/characters'
+import { useBookUiStore } from '@/stores/bookUi'
 import ChapterList from './ChapterList.vue'
 import ChapterEditor from './ChapterEditor.vue'
 import InsightsSidebar from './InsightsSidebar.vue'
@@ -21,14 +22,14 @@ const chapters = useChaptersStore()
 const insights = useInsightsStore()
 const lore = useLoreStore()
 const characters = useCharactersStore()
+const ui = useBookUiStore()
 
 const book = ref<Book | null>(null)
 const showInsights = ref(true)
 const showLoreSidebar = ref(true)
-type Tab = 'manuscript' | 'lore' | 'characters'
-const tab = ref<Tab>('manuscript')
 
 onMounted(async () => {
+  ui.setTab('manuscript')
   const id = Number(route.params.id)
   book.value = await booksStore.get(id)
   await Promise.all([
@@ -55,22 +56,22 @@ onMounted(async () => {
       <nav class="ml-4 flex items-center gap-1 rounded-lg bg-surface-2 p-1">
         <button
           class="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm transition-colors"
-          :class="tab === 'manuscript' ? 'bg-surface text-ink shadow-sm' : 'text-ink-dim hover:text-ink'"
-          @click="tab = 'manuscript'"
+          :class="ui.tab === 'manuscript' ? 'bg-surface text-ink shadow-sm' : 'text-ink-dim hover:text-ink'"
+          @click="ui.setTab('manuscript')"
         >
           <BookText :size="15" /> Manuscript
         </button>
         <button
           class="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm transition-colors"
-          :class="tab === 'lore' ? 'bg-surface text-ink shadow-sm' : 'text-ink-dim hover:text-ink'"
-          @click="tab = 'lore'"
+          :class="ui.tab === 'lore' ? 'bg-surface text-ink shadow-sm' : 'text-ink-dim hover:text-ink'"
+          @click="ui.setTab('lore')"
         >
           <Library :size="15" /> Lore
         </button>
         <button
           class="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm transition-colors"
-          :class="tab === 'characters' ? 'bg-surface text-ink shadow-sm' : 'text-ink-dim hover:text-ink'"
-          @click="tab = 'characters'"
+          :class="ui.tab === 'characters' ? 'bg-surface text-ink shadow-sm' : 'text-ink-dim hover:text-ink'"
+          @click="ui.setTab('characters')"
         >
           <Users :size="15" /> Characters
         </button>
@@ -78,7 +79,7 @@ onMounted(async () => {
 
       <!-- right-sidebar toggle (per tab) -->
       <button
-        v-if="tab === 'manuscript'"
+        v-if="ui.tab === 'manuscript'"
         class="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors"
         :class="showInsights ? 'text-accent' : 'text-ink-dim hover:text-ink'"
         title="Toggle Goals & Insights"
@@ -87,7 +88,7 @@ onMounted(async () => {
         <PanelRight :size="16" /> Insights
       </button>
       <button
-        v-else-if="tab === 'lore'"
+        v-else-if="ui.tab === 'lore'"
         class="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm transition-colors"
         :class="showLoreSidebar ? 'text-accent' : 'text-ink-dim hover:text-ink'"
         title="Toggle Codex details"
@@ -98,7 +99,7 @@ onMounted(async () => {
 
       <button
         class="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-ink-dim transition-colors hover:text-ink"
-        :class="tab === 'characters' ? 'ml-auto' : ''"
+        :class="ui.tab === 'characters' ? 'ml-auto' : ''"
         @click="router.push(`/book/${route.params.id}/settings`)"
       >
         <Settings2 :size="16" /> Settings
@@ -106,7 +107,7 @@ onMounted(async () => {
     </header>
 
     <!-- MANUSCRIPT -->
-    <div v-if="tab === 'manuscript'" class="flex flex-1 overflow-hidden">
+    <div v-if="ui.tab === 'manuscript'" class="flex flex-1 overflow-hidden">
       <ChapterList />
       <main class="flex-1 overflow-hidden">
         <ChapterEditor v-if="chapters.active" :chapter="chapters.active" />
@@ -118,9 +119,9 @@ onMounted(async () => {
     </div>
 
     <!-- LORE -->
-    <LoreView v-else-if="tab === 'lore'" :show-sidebar="showLoreSidebar" />
+    <LoreView v-else-if="ui.tab === 'lore'" :show-sidebar="showLoreSidebar" />
 
     <!-- CHARACTERS -->
-    <CharacterView v-else-if="tab === 'characters'" />
+    <CharacterView v-else-if="ui.tab === 'characters'" />
   </div>
 </template>

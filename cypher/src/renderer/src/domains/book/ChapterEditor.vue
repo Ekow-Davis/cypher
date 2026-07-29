@@ -2,6 +2,8 @@
 import { ref, watch, onBeforeUnmount, type Component } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
+import { createCharacterMention, mentionClickHandler } from '@/lib/characterMention'
+import { useBookUiStore } from '@/stores/bookUi'
 import {
   Bold,
   Italic,
@@ -17,6 +19,7 @@ import type { Chapter } from '@shared/types'
 
 const props = defineProps<{ chapter: Chapter | null }>()
 const store = useChaptersStore()
+const bookUi = useBookUiStore()
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved'
 const status = ref<SaveStatus>('saved')
@@ -27,9 +30,12 @@ let loadingContent = false // suppress autosave while we set content programmati
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 const editor = useEditor({
-  extensions: [StarterKit],
+  extensions: [StarterKit, createCharacterMention()],
   content: '',
-  editorProps: { attributes: { class: 'cypher-prose' } },
+  editorProps: {
+    attributes: { class: 'cypher-prose' },
+    handleClick: mentionClickHandler((id) => bookUi.openCharacter(id))
+  },
   onUpdate: () => {
     if (loadingContent) return
     status.value = 'unsaved'

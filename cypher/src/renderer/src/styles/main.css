@@ -116,3 +116,18 @@ body {
   padding: 0.1rem 0.3rem;
   font-size: 0.9em;
 }
+
+/* ---------- Character mentions ---------- */
+.cypher-mention {
+  color: var(--color-accent);
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  border-radius: 5px;
+  padding: 0.05em 0.3em;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cypher-mention:hover {
+  background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+  text-decoration: underline;
+}
