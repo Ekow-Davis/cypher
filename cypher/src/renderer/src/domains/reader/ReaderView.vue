@@ -1,11 +1,23 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, ImagePlus, Copy, Check, BookOpen, Info, X, ExternalLink } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  ImagePlus,
+  Copy,
+  Check,
+  BookOpen,
+  Info,
+  X,
+  ExternalLink,
+  Wand2,
+  Loader2
+} from 'lucide-vue-next'
 import { useReaderStore } from '@/stores/reader'
 import { useBreakpoint } from '@/lib/useBreakpoint'
 import { assetUrl } from '@/lib/assets'
 import EpubReader from './EpubReader.vue'
+import PdfReader from './PdfReader.vue'
 import type { ReaderItem } from '@shared/types'
 
 const route = useRoute()
@@ -17,6 +29,19 @@ const id = Number(route.params.id)
 const title = ref('')
 const author = ref('')
 const copied = ref(false)
+const fetching = ref(false)
+
+/** Pull title, author, and cover out of the file itself. */
+async function fetchMeta(): Promise<void> {
+  if (!item.value) return
+  fetching.value = true
+  await store.fetchMetadata(item.value.id)
+  if (item.value) {
+    title.value = item.value.title
+    author.value = item.value.author ?? ''
+  }
+  fetching.value = false
+}
 const showDetails = ref(false)
 
 /** Read alongside writing: this book in its own window. */
@@ -93,15 +118,9 @@ async function copyPath(): Promise<void> {
       <!-- reading surface -->
       <div class="min-w-0 flex-1 overflow-hidden">
         <EpubReader v-if="item.format === 'epub'" :key="item.id" :item="item" />
-        <div v-else class="flex h-full items-center justify-center p-6 text-center">
-          <div class="max-w-sm text-ink-dim">
-            <BookOpen :size="34" class="mx-auto mb-3 opacity-50" />
-            <p class="mb-1 text-sm font-medium text-ink">PDF reading is coming next</p>
-            <p class="text-xs">
-              The PDF reader (page navigation and outline-based chapters) arrives in the next
-              update. EPUB reading is available now.
-            </p>
-          </div>
+        <PdfReader v-else-if="item.format === 'pdf'" :key="`pdf-${item.id}`" :item="item" />
+        <div v-else class="flex h-full items-center justify-center p-6 text-center text-ink-dim">
+          Unsupported format.
         </div>
       </div>
 
@@ -148,6 +167,17 @@ async function copyPath(): Promise<void> {
             @keydown.enter="commitAuthor"
           />
         </div>
+        <button
+          class="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border py-1.5 text-xs text-ink-dim transition-colors hover:text-ink disabled:opacity-60"
+          :disabled="fetching"
+          title="Read title, author and cover from the file"
+          @click="fetchMeta"
+        >
+          <Loader2 v-if="fetching" :size="14" class="animate-spin" />
+          <Wand2 v-else :size="14" />
+          {{ fetching ? 'Reading…' : 'Fetch metadata' }}
+        </button>
+
         <div>
           <label class="mb-1 block text-xs text-ink-dim">Format</label>
           <span class="inline-block rounded-md bg-surface-2 px-2 py-1 text-xs font-semibold uppercase">{{ item.format }}</span>

@@ -69,15 +69,18 @@ import {
   importReaderFile,
   importReaderCover,
   deleteSourceFile,
-  deleteReaderAssets
+  deleteReaderAssets,
+  saveCoverBytes
 } from './reader'
+import { readEpubMetadata } from './epubMeta'
+import { listMarks, createMark, updateMark, deleteMark } from './db/repositories/marks'
 import {
   listCheckins,
   snapshotProgress,
   setMood
 } from './db/repositories/checkins'
 import { importCover, importCharacterImage, absoluteAssetPath } from './assets'
-import { exportBook } from './export'
+import { exportBook, exportSection } from './export'
 import { openWindow, windowCount, broadcastDataChanged } from './windows'
 import {
   listBackups,
@@ -97,11 +100,15 @@ import type {
   CreateLoreOptions,
   CreateCharacterOptions,
   ReaderItem,
+  CreateMarkInput,
+  UpdateMarkInput,
   UpdateNoteInput,
   TrashKind,
   UpdateChapterMetaInput,
   ExportFormat,
-  ExportOptions
+  ExportOptions,
+  SectionKind,
+  SectionExportOptions
 } from '@shared/types'
 
 /**
@@ -268,13 +275,47 @@ export function registerIpcHandlers(): void {
   handle('reader:import', async () => {
     const f = await importReaderFile()
     if (!f) return null
-    const item = createReaderItem({
-      title: f.title,
+    // Prefer the book's own metadata over the filename.
+    const meta =
+      f.format === 'epub' ? await readEpubMetadata(absoluteAssetPath(f.relPath)) : {}
+    let item = createReaderItem({
+      title: meta.title || f.title,
+      author: meta.author ?? null,
       format: f.format,
       filePath: f.relPath,
       sourcePath: f.sourcePath
     })
+    if (meta.cover) {
+      const rel = saveCoverBytes(meta.cover.data, meta.cover.ext)
+      item = setReaderCover(item.id, rel) ?? item
+    }
     return { item: withAbs(item), sourcePath: f.sourcePath }
+  })
+
+  /**
+   * Re-reads metadata for an item already in the library. EPUBs are handled
+   * here; PDFs report back unhandled so the renderer (which has pdf.js and a
+   * canvas) can pull their title and render a first-page cover.
+   */
+  handle('reader:extractMeta', async (_e, id: number) => {
+    const existing = getReaderItem(id)
+    if (!existing) return { handled: false, item: null }
+    if (existing.format !== 'epub') return { handled: false, item: withAbs(existing) }
+
+    const meta = await readEpubMetadata(absoluteAssetPath(existing.file_path))
+    let item = existing
+    if (meta.title) item = renameReaderItem(id, meta.title) ?? item
+    if (meta.author) item = setReaderAuthor(id, meta.author) ?? item
+    if (meta.cover) {
+      const rel = saveCoverBytes(meta.cover.data, meta.cover.ext)
+      item = setReaderCover(id, rel) ?? item
+    }
+    return { handled: true, item: withAbs(item) }
+  })
+
+  handle('reader:setCoverFromImage', (_e, id: number, data: ArrayBuffer, ext: string) => {
+    const rel = saveCoverBytes(Buffer.from(data), ext)
+    return withAbs(setReaderCover(id, rel))
   })
   handle('reader:deleteSource', (_e, path: string) => deleteSourceFile(path))
   handle('reader:rename', (_e, id: number, title: string) =>
@@ -288,8 +329,8 @@ export function registerIpcHandlers(): void {
     if (!cover) return withAbs(getReaderItem(id))
     return withAbs(setReaderCover(id, cover))
   })
-  handle('reader:setLocation', (_e, id: number, location: string | null) =>
-    withAbs(updateReaderLocation(id, location))
+  handle('reader:setLocation', (_e, id: number, location: string | null, progress?: number) =>
+    withAbs(updateReaderLocation(id, location, progress))
   )
   handle('reader:delete', (_e, id: number) => {
     const row = deleteReaderItem(id)
@@ -301,6 +342,17 @@ export function registerIpcHandlers(): void {
     'export:book',
     (_e, bookId: number, format: ExportFormat, options: ExportOptions) =>
       exportBook(bookId, format, options)
+  )
+
+  handle(
+    'export:section',
+    (
+      _e,
+      bookId: number,
+      kind: SectionKind,
+      format: 'docx' | 'pdf',
+      options: SectionExportOptions
+    ) => exportSection(bookId, kind, format, options)
   )
 
   // Trash
@@ -318,6 +370,12 @@ export function registerIpcHandlers(): void {
   handle('backup:archive', () => exportArchive())
   handle('backup:archiveDue', () => archiveDue())
   handle('backup:snoozeArchive', (_e, days?: number) => snoozeArchive(days ?? 3))
+
+  // Reading marks
+  handle('marks:list', (_e, itemId: number) => listMarks(itemId))
+  handle('marks:create', (_e, input: CreateMarkInput) => createMark(input))
+  handle('marks:update', (_e, id: number, patch: UpdateMarkInput) => updateMark(id, patch))
+  handle('marks:delete', (_e, id: number) => deleteMark(id))
 
   // Notes
   handle('notes:list', (_e, ownerType: string, ownerId: number) =>

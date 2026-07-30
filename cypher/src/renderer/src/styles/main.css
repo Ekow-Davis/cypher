@@ -139,3 +139,26 @@ body {
   border-radius: 3px;
   padding: 0 1px;
 }
+
+/* ---------- PDF selectable text layer ---------- */
+.pdf-text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  opacity: 1;
+}
+.pdf-text-layer span,
+.pdf-text-layer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+.pdf-text-layer ::selection {
+  background: color-mix(in oklab, var(--color-accent) 45%, transparent);
+}

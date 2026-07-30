@@ -18,12 +18,17 @@ import type {
   ReaderImportResult,
   Note,
   UpdateNoteInput,
+  ReaderMark,
+  CreateMarkInput,
+  UpdateMarkInput,
   BackupInfo,
   TrashItem,
   TrashKind,
   ExportFormat,
   ExportOptions,
-  ExportResult
+  ExportResult,
+  SectionKind,
+  SectionExportOptions
 } from '@shared/types'
 
 const cypher = {
@@ -165,7 +170,14 @@ const cypher = {
 
   exporter: {
     book: (bookId: number, format: ExportFormat, options: ExportOptions): Promise<ExportResult> =>
-      ipcRenderer.invoke('export:book', bookId, format, options)
+      ipcRenderer.invoke('export:book', bookId, format, options),
+    section: (
+      bookId: number,
+      kind: SectionKind,
+      format: 'docx' | 'pdf',
+      options: SectionExportOptions
+    ): Promise<ExportResult> =>
+      ipcRenderer.invoke('export:section', bookId, kind, format, options)
   },
 
   trash: {
@@ -187,6 +199,15 @@ const cypher = {
     archiveDue: (): Promise<boolean> => ipcRenderer.invoke('backup:archiveDue'),
     snoozeArchive: (days?: number): Promise<void> =>
       ipcRenderer.invoke('backup:snoozeArchive', days)
+  },
+
+  marks: {
+    list: (itemId: number): Promise<ReaderMark[]> => ipcRenderer.invoke('marks:list', itemId),
+    create: (input: CreateMarkInput): Promise<ReaderMark> =>
+      ipcRenderer.invoke('marks:create', input),
+    update: (id: number, patch: UpdateMarkInput): Promise<ReaderMark | null> =>
+      ipcRenderer.invoke('marks:update', id, patch),
+    remove: (id: number): Promise<void> => ipcRenderer.invoke('marks:delete', id)
   },
 
   notes: {
@@ -211,11 +232,19 @@ const cypher = {
       ipcRenderer.invoke('reader:setAuthor', id, author),
     importCover: (id: number): Promise<ReaderItem | null> =>
       ipcRenderer.invoke('reader:importCover', id),
-    setLocation: (id: number, location: string | null): Promise<ReaderItem | null> =>
-      ipcRenderer.invoke('reader:setLocation', id, location),
+    setLocation: (
+      id: number,
+      location: string | null,
+      progress?: number
+    ): Promise<ReaderItem | null> =>
+      ipcRenderer.invoke('reader:setLocation', id, location, progress),
     remove: (id: number): Promise<boolean> => ipcRenderer.invoke('reader:delete', id),
     fileData: (id: number): Promise<ArrayBuffer | null> =>
-      ipcRenderer.invoke('reader:fileData', id)
+      ipcRenderer.invoke('reader:fileData', id),
+    extractMeta: (id: number): Promise<{ handled: boolean; item: ReaderItem | null }> =>
+      ipcRenderer.invoke('reader:extractMeta', id),
+    setCoverFromImage: (id: number, data: ArrayBuffer, ext: string): Promise<ReaderItem | null> =>
+      ipcRenderer.invoke('reader:setCoverFromImage', id, data, ext)
   }
 }
 

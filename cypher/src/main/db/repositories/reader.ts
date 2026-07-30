@@ -49,8 +49,22 @@ export function setReaderCover(id: number, coverPath: string | null): ReaderItem
   return getReaderItem(id)
 }
 
-export function updateReaderLocation(id: number, location: string | null): ReaderItem | null {
-  getDb().prepare('UPDATE reader_items SET last_location = ? WHERE id = ?').run(location, id)
+export function updateReaderLocation(
+  id: number,
+  location: string | null,
+  progress?: number
+): ReaderItem | null {
+  const db = getDb()
+  if (typeof progress === 'number' && Number.isFinite(progress)) {
+    const clamped = Math.max(0, Math.min(1, progress))
+    db.prepare(
+      "UPDATE reader_items SET last_location = ?, progress = ?, last_read_at = datetime('now') WHERE id = ?"
+    ).run(location, clamped, id)
+  } else {
+    db.prepare(
+      "UPDATE reader_items SET last_location = ?, last_read_at = datetime('now') WHERE id = ?"
+    ).run(location, id)
+  }
   return getReaderItem(id)
 }
 

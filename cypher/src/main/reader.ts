@@ -1,6 +1,6 @@
 import { dialog } from 'electron'
 import { join, extname, basename } from 'node:path'
-import { copyFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs'
+import { copyFileSync, mkdirSync, existsSync, unlinkSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { assetsRoot } from './assets'
 import type { ReaderFormat } from '@shared/types'
@@ -49,6 +49,16 @@ export async function importReaderCover(): Promise<string | null> {
   const ext = extname(src).toLowerCase() || '.png'
   const name = `${randomUUID()}${ext}`
   copyFileSync(src, join(dir, name))
+  return `reader-covers/${name}`
+}
+
+/** Writes cover bytes we extracted ourselves into app storage. */
+export function saveCoverBytes(data: Buffer, ext: string): string {
+  const dir = join(assetsRoot(), 'reader-covers')
+  mkdirSync(dir, { recursive: true })
+  const safeExt = /^\.[a-z0-9]+$/i.test(ext) ? ext.toLowerCase() : '.png'
+  const name = `${randomUUID()}${safeExt}`
+  writeFileSync(join(dir, name), data)
   return `reader-covers/${name}`
 }
 

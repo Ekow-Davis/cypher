@@ -21,7 +21,9 @@ export default defineConfig({
         '@shared': shared
       }
     },
-    optimizeDeps: { include: ['epubjs'] },
+    // pdfjs-dist is excluded: it ships ESM with a separate worker file, and
+    // pre-bundling it breaks the worker URL resolution.
+    optimizeDeps: { include: ['epubjs'], exclude: ['pdfjs-dist'] },
     plugins: [vue(), tailwindcss()]
   }
 })

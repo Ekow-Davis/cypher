@@ -11,6 +11,7 @@ import {
 } from 'lucide-vue-next'
 import { useChaptersStore } from '@/stores/chapters'
 import { usePreferencesStore } from '@/stores/preferences'
+import { useBooksStore } from '@/stores/books'
 import type { ExportFormat, ChapterStatus } from '@shared/types'
 
 const props = defineProps<{ bookId: number }>()
@@ -18,6 +19,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const chaptersStore = useChaptersStore()
 const prefs = usePreferencesStore()
+const books = useBooksStore()
 
 const format = ref<ExportFormat>('docx')
 const author = ref('')
@@ -90,7 +92,9 @@ function selectNone(): void {
 
 watch(ordered, applyStatusFilter, { immediate: true })
 onMounted(() => {
-  author.value = prefs.defaultAuthor
+  // A book's own author wins over the global default (pen names).
+  const book = books.books.find((b) => b.id === props.bookId)
+  author.value = book?.author?.trim() || prefs.defaultAuthor
 })
 
 const dotFor = (s: ChapterStatus): string => STATUSES.find((x) => x.key === s)?.dot ?? 'bg-amber-400'

@@ -90,7 +90,7 @@ export async function exportEpub(
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
     <dc:identifier id="bookid">urn:uuid:${uuid}</dc:identifier>
     <dc:title>${escapeHtml(data.book.title)}</dc:title>
-    <dc:language>en</dc:language>
+    <dc:language>${escapeHtml(data.book.language || 'en')}</dc:language>
     ${options.author.trim() ? `<dc:creator>${escapeHtml(options.author.trim())}</dc:creator>` : ''}
     <meta property="dcterms:modified">${new Date().toISOString().replace(/\.\d+Z$/, 'Z')}</meta>
     ${coverMeta}

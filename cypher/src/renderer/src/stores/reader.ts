@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ReaderItem, ReaderImportResult } from '@shared/types'
+import { enrichPdf } from '@/lib/pdfMeta'
 
 export const useReaderStore = defineStore('reader', () => {
   const items = ref<ReaderItem[]>([])
@@ -50,6 +51,25 @@ export const useReaderStore = defineStore('reader', () => {
     return (await guard('Delete original', () => window.cypher.reader.deleteSource(path))) ?? false
   }
 
+  /**
+   * Fills in title, author, and cover from the file itself. EPUBs are read in
+   * main; PDFs need a canvas, so that half runs here.
+   */
+  async function fetchMetadata(id: number): Promise<void> {
+    const res = await guard('Read metadata', () => window.cypher.reader.extractMeta(id))
+    if (!res) return
+    if (res.handled && res.item) {
+      replace(res.item)
+      return
+    }
+    const item = items.value.find((i) => i.id === id)
+    if (item?.format === 'pdf') {
+      await enrichPdf(id)
+      const fresh = await guard('Reload book', () => window.cypher.reader.get(id))
+      if (fresh) replace(fresh)
+    }
+  }
+
   async function rename(id: number, title: string): Promise<void> {
     const u = await guard('Rename', () => window.cypher.reader.rename(id, title))
     if (u) replace(u)
@@ -65,8 +85,10 @@ export const useReaderStore = defineStore('reader', () => {
     if (u) replace(u)
   }
 
-  async function setLocation(id: number, location: string | null): Promise<void> {
-    const u = await guard('Save position', () => window.cypher.reader.setLocation(id, location))
+  async function setLocation(id: number, location: string | null, progress?: number): Promise<void> {
+    const u = await guard('Save position', () =>
+      window.cypher.reader.setLocation(id, location, progress)
+    )
     if (u) replace(u)
   }
 
@@ -90,6 +112,7 @@ export const useReaderStore = defineStore('reader', () => {
     lastError,
     load,
     importFile,
+    fetchMetadata,
     deleteSource,
     rename,
     setAuthor,

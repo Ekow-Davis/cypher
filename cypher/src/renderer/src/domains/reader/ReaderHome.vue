@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, ImagePlus, Trash2, AlertCircle, X, BookOpen } from 'lucide-vue-next'
+import { Plus, ImagePlus, Trash2, AlertCircle, X, BookOpen, Search, ArrowUpDown } from 'lucide-vue-next'
 import { useReaderStore } from '@/stores/reader'
 import { assetUrl } from '@/lib/assets'
 import type { ReaderImportResult } from '@shared/types'
@@ -11,13 +11,59 @@ const router = useRouter()
 
 const pendingDelete = ref<ReaderImportResult | null>(null)
 
+type SortKey = 'recent' | 'added' | 'title' | 'author'
+const query = ref('')
+const sort = ref<SortKey>('recent')
+const formatFilter = ref<'all' | 'epub' | 'pdf'>('all')
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'recent', label: 'Recently read' },
+  { key: 'added', label: 'Recently added' },
+  { key: 'title', label: 'Title' },
+  { key: 'author', label: 'Author' }
+]
+
+const visible = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  const list = store.items.filter((i) => {
+    if (formatFilter.value !== 'all' && i.format !== formatFilter.value) return false
+    if (!q) return true
+    return (
+      i.title.toLowerCase().includes(q) || (i.author ?? '').toLowerCase().includes(q)
+    )
+  })
+  const sorted = [...list]
+  switch (sort.value) {
+    case 'title':
+      sorted.sort((a, b) => a.title.localeCompare(b.title))
+      break
+    case 'author':
+      sorted.sort((a, b) => (a.author ?? '').localeCompare(b.author ?? ''))
+      break
+    case 'added':
+      sorted.sort((a, b) => (b.added_at ?? '').localeCompare(a.added_at ?? ''))
+      break
+    default:
+      // unread books sink below anything you've actually opened
+      sorted.sort((a, b) => (b.last_read_at ?? '').localeCompare(a.last_read_at ?? ''))
+  }
+  return sorted
+})
+
+function pct(item: { progress?: number }): number {
+  return Math.round(Math.max(0, Math.min(1, item.progress ?? 0)) * 100)
+}
+
 onMounted(() => {
   if (!store.loaded) void store.load()
 })
 
 async function addBook(): Promise<void> {
   const res = await store.importFile()
-  if (res) pendingDelete.value = res
+  if (!res) return
+  pendingDelete.value = res
+  // EPUB metadata is already applied by main; PDFs get their cover rendered here.
+  if (res.item.format === 'pdf') void store.fetchMetadata(res.item.id)
 }
 
 async function confirmDeleteSource(): Promise<void> {
@@ -51,15 +97,50 @@ function open(id: number): void {
       <button class="shrink-0 hover:text-red-100" @click="store.clearError()"><X :size="15" /></button>
     </div>
 
+    <div class="flex flex-wrap items-center gap-2 border-b border-border px-6 py-3">
+      <div class="flex min-w-[180px] flex-1 items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-2 py-1.5">
+        <Search :size="14" class="shrink-0 text-ink-dim" />
+        <input
+          v-model="query"
+          placeholder="Search title or author…"
+          class="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-dim"
+        />
+        <button v-if="query" class="shrink-0 text-ink-dim hover:text-ink" @click="query = ''">
+          <X :size="13" />
+        </button>
+      </div>
+
+      <div class="flex items-center gap-1 rounded-lg bg-surface-2 p-1">
+        <button
+          v-for="f in (['all', 'epub', 'pdf'] as const)"
+          :key="f"
+          class="rounded-md px-2 py-1 text-xs uppercase transition-colors"
+          :class="formatFilter === f ? 'bg-surface text-ink shadow-sm' : 'text-ink-dim hover:text-ink'"
+          @click="formatFilter = f"
+        >
+          {{ f }}
+        </button>
+      </div>
+
+      <div class="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1.5">
+        <ArrowUpDown :size="14" class="shrink-0 text-ink-dim" />
+        <select v-model="sort" class="bg-transparent text-xs outline-none">
+          <option v-for="o in SORTS" :key="o.key" :value="o.key">{{ o.label }}</option>
+        </select>
+      </div>
+    </div>
+
     <div class="flex-1 overflow-auto p-6">
-      <div v-if="!store.items.length" class="flex h-full flex-col items-center justify-center text-ink-dim">
+      <div v-if="!visible.length" class="flex h-full flex-col items-center justify-center text-ink-dim">
         <BookOpen :size="40" class="mb-3 opacity-50" />
-        <p class="text-sm">Your library is empty.</p>
-        <p class="text-xs">Add an EPUB or PDF to start reading.</p>
+        <p class="text-sm">{{ store.items.length ? 'Nothing matches those filters.' : 'Your library is empty.' }}</p>
+        <p class="text-xs">
+          {{ store.items.length ? 'Try a different search or format.' : 'Add an EPUB or PDF to start reading.' }}
+        </p>
       </div>
 
       <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-5">
-        <div v-for="item in store.items" :key="item.id" class="group flex flex-col">
+        <div v-for="item in visible" :key="item.id" class="group flex flex-col">
           <!-- cover -->
           <div
             class="relative aspect-[2/3] cursor-pointer overflow-hidden rounded-xl border border-border bg-surface-2"
@@ -80,6 +161,14 @@ function open(id: number): void {
             >
               {{ item.format }}
             </span>
+            <div
+              v-if="pct(item) > 0"
+              class="absolute inset-x-0 bottom-0 h-1 bg-black/30"
+              :title="`${pct(item)}% read`"
+            >
+              <div class="h-full bg-accent" :style="{ width: pct(item) + '%' }" />
+            </div>
+
             <!-- hover actions -->
             <div class="absolute inset-x-0 bottom-0 flex justify-center gap-1 bg-black/55 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
               <button class="rounded p-1 text-white hover:text-accent" title="Set cover" @click.stop="store.importCover(item.id)">
@@ -94,7 +183,12 @@ function open(id: number): void {
           <button class="mt-2 truncate text-left text-sm font-medium hover:text-accent" @click="open(item.id)">
             {{ item.title }}
           </button>
-          <span class="truncate text-xs text-ink-dim">{{ item.author || '—' }}</span>
+          <div class="flex items-baseline justify-between gap-2">
+            <span class="min-w-0 truncate text-xs text-ink-dim">{{ item.author || '—' }}</span>
+            <span v-if="pct(item) > 0" class="shrink-0 text-[10px] tabular-nums text-ink-dim">
+              {{ pct(item) }}%
+            </span>
+          </div>
         </div>
       </div>
     </div>

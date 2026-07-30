@@ -3,6 +3,9 @@ import { gatherBook } from './gather'
 import { exportDocx } from './exportDocx'
 import { exportPdf } from './exportPdf'
 import { exportEpub } from './exportEpub'
+import { gatherSection } from './sectioned'
+import { exportSectionDocx, exportSectionPdf } from './exportSection'
+import type { SectionKind, SectionExportOptions } from '@shared/types'
 import type { ExportFormat, ExportOptions } from './types'
 
 export type { ExportFormat, ExportOptions }
@@ -55,5 +58,34 @@ export async function exportBook(
       chapters: 0,
       error: e instanceof Error ? e.message : String(e)
     }
+  }
+}
+
+/** Exports the codex or the cast on its own — Word or PDF, no EPUB. */
+export async function exportSection(
+  bookId: number,
+  kind: SectionKind,
+  format: 'docx' | 'pdf',
+  options: SectionExportOptions
+): Promise<ExportResult> {
+  const doc = gatherSection(bookId, kind, options.ids, options.includeEmptyFields)
+  if (!doc) return { path: null, chapters: 0, error: 'Book not found.' }
+  if (!doc.count) {
+    return { path: null, chapters: 0, error: 'Nothing selected to export.' }
+  }
+
+  const result = await dialog.showSaveDialog({
+    title: `Export ${kind === 'lore' ? 'lore' : 'characters'} as ${format.toUpperCase()}`,
+    defaultPath: `${safeName(doc.docTitle)}.${format}`,
+    filters: [FILTERS[format]]
+  })
+  if (result.canceled || !result.filePath) return { path: null, chapters: 0, cancelled: true }
+
+  try {
+    if (format === 'docx') await exportSectionDocx(doc, options, result.filePath)
+    else await exportSectionPdf(doc, options, result.filePath)
+    return { path: result.filePath, chapters: doc.count }
+  } catch (e) {
+    return { path: null, chapters: 0, error: e instanceof Error ? e.message : String(e) }
   }
 }

@@ -28,6 +28,7 @@ import InsightsSidebar from './InsightsSidebar.vue'
 import LoreView from './LoreView.vue'
 import CharacterView from './CharacterView.vue'
 import ExportDialog from './ExportDialog.vue'
+import SectionExportDialog from './SectionExportDialog.vue'
 import OverflowMenu from '@/components/OverflowMenu.vue'
 import { useBreakpoint } from '@/lib/useBreakpoint'
 import type { Book } from '@shared/types'
@@ -48,6 +49,7 @@ const book = ref<Book | null>(null)
 const showInsights = ref(true)
 const showLoreSidebar = ref(true)
 const showExport = ref(false)
+const showSectionExport = ref<'lore' | 'characters' | null>(null)
 const windowNotice = ref<string | null>(null)
 const showChapters = ref(true)
 
@@ -187,6 +189,20 @@ onMounted(async () => {
             <Download :size="15" /> Export book…
           </button>
           <button
+            v-if="ui.tab === 'lore'"
+            class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink-dim hover:bg-surface-2 hover:text-ink"
+            @click="showSectionExport = 'lore'"
+          >
+            <Download :size="15" /> Export lore…
+          </button>
+          <button
+            v-if="ui.tab === 'characters'"
+            class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink-dim hover:bg-surface-2 hover:text-ink"
+            @click="showSectionExport = 'characters'"
+          >
+            <Download :size="15" /> Export characters…
+          </button>
+          <button
             class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink-dim hover:bg-surface-2 hover:text-ink"
             @click="openInNewWindow"
           >
@@ -233,6 +249,13 @@ onMounted(async () => {
     >
       {{ windowNotice }}
     </div>
+
+    <SectionExportDialog
+      v-if="showSectionExport"
+      :book-id="Number(route.params.id)"
+      :kind="showSectionExport"
+      @close="showSectionExport = null"
+    />
 
     <ExportDialog v-if="showExport" :book-id="Number(route.params.id)" @close="showExport = false" />
 

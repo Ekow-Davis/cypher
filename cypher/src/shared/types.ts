@@ -10,6 +10,8 @@ export interface Book {
   genre: string | null
   status: BookStatus
   cover_path: string | null // relative ref under app-data assets, e.g. "covers/uuid.png"
+  author: string | null
+  language: string
   created_at: string
   archived: number // SQLite has no boolean: 0 | 1
 }
@@ -26,6 +28,8 @@ export interface UpdateBookInput {
   genre?: string | null
   status?: BookStatus
   cover_path?: string | null
+  author?: string | null
+  language?: string
 }
 
 export type ChapterStatus = 'outline' | 'draft' | 'revised' | 'final'
@@ -148,6 +152,8 @@ export interface ReaderItem {
   cover_path: string | null
   source_path: string | null
   last_location: string | null
+  progress: number // 0–1
+  last_read_at: string | null
   added_at: string
   abs_path?: string // absolute path on disk, enriched by main for display
 }
@@ -210,4 +216,47 @@ export interface ExportResult {
   chapters: number
   cancelled?: boolean
   error?: string
+}
+
+export type MarkKind = 'bookmark' | 'highlight'
+
+export interface ReaderMark {
+  id: number
+  item_id: number
+  kind: MarkKind
+  location: string
+  label: string | null
+  excerpt: string | null
+  note: string | null
+  color: string | null
+  rects: string | null // JSON [[x,y,w,h], …] as fractions of the page (PDF only)
+  created_at: string
+}
+
+export interface CreateMarkInput {
+  itemId: number
+  kind: MarkKind
+  location: string
+  label?: string | null
+  excerpt?: string | null
+  note?: string | null
+  color?: string | null
+  rects?: string | null
+}
+
+export interface UpdateMarkInput {
+  note?: string | null
+  color?: string | null
+}
+
+export type SectionKind = 'lore' | 'characters'
+
+export interface SectionExportOptions {
+  author: string
+  titlePage: boolean
+  tableOfContents: boolean
+  groupHeadings: boolean
+  includeEmptyFields: boolean
+  includePortraits: boolean
+  ids: number[]
 }

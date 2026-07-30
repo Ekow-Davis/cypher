@@ -241,3 +241,60 @@ export function migration008(db: Database): void {
       REFERENCES characters(id) ON DELETE SET NULL;
   `)
 }
+
+/**
+ * Migration 009 — reading marks: bookmarks, highlights, and notes.
+ * `location` holds whatever addresses the spot in that format — an EPUB CFI or
+ * a PDF page number — so one table serves both readers.
+ */
+export function migration009(db: Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS reader_marks (
+      id          INTEGER PRIMARY KEY,
+      item_id     INTEGER NOT NULL REFERENCES reader_items(id) ON DELETE CASCADE,
+      kind        TEXT    NOT NULL,   -- 'bookmark' | 'highlight'
+      location    TEXT    NOT NULL,
+      label       TEXT,
+      excerpt     TEXT,
+      note        TEXT,
+      color       TEXT,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_marks_item ON reader_marks(item_id);
+  `)
+}
+
+/**
+ * Migration 010 — publishing details on a book: its own author (a pen name may
+ * differ per book) and a language code, which EPUB metadata previously
+ * hardcoded to English.
+ */
+export function migration010(db: Database): void {
+  db.exec(`
+    ALTER TABLE books ADD COLUMN author TEXT;
+    ALTER TABLE books ADD COLUMN language TEXT NOT NULL DEFAULT 'en';
+  `)
+}
+
+/**
+ * Migration 011 — highlight geometry. EPUB highlights are addressed by CFI, but
+ * a PDF has no DOM to point at, so we store the selection rectangles as
+ * fractions of the page. Fractions rather than pixels means zooming or
+ * re-rendering at another size keeps them in the right place.
+ */
+export function migration011(db: Database): void {
+  db.exec(`ALTER TABLE reader_marks ADD COLUMN rects TEXT;`)
+}
+
+/**
+ * Migration 012 — shelf progress. `last_location` addresses a spot but says
+ * nothing about how far through the book it is, and an EPUB CFI can't be turned
+ * into a percentage without the reader open. So the readers report progress as
+ * they go, and the library reads it straight off the row.
+ */
+export function migration012(db: Database): void {
+  db.exec(`
+    ALTER TABLE reader_items ADD COLUMN progress REAL NOT NULL DEFAULT 0;
+    ALTER TABLE reader_items ADD COLUMN last_read_at TEXT;
+  `)
+}

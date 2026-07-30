@@ -8,7 +8,16 @@ import type { Book, CreateBookInput, UpdateBookInput } from '@shared/types'
  */
 
 // Columns the renderer is allowed to update (guards the dynamic UPDATE).
-const UPDATABLE = ['title', 'subtitle', 'synopsis', 'genre', 'status', 'cover_path'] as const
+const UPDATABLE = [
+  'title',
+  'subtitle',
+  'synopsis',
+  'genre',
+  'status',
+  'cover_path',
+  'author',
+  'language'
+] as const
 
 export function listBooks(includeArchived = false): Book[] {
   const sql = includeArchived
