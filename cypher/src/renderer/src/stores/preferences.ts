@@ -4,6 +4,7 @@ import { ref } from 'vue'
 export type FocusWidth = 'narrow' | 'medium' | 'wide'
 export type DocsView = 'list' | 'grid'
 export type PageView = 'paged' | 'continuous'
+export type PageMargin = 'narrow' | 'normal' | 'wide'
 
 const KEY = 'editorPrefs'
 
@@ -15,6 +16,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const defaultAuthor = ref('')
   const docsView = ref<DocsView>('list')
   const pageView = ref<PageView>('paged')
+  const pageMargin = ref<PageMargin>('normal')
   const loaded = ref(false)
 
   async function load(): Promise<void> {
@@ -27,6 +29,8 @@ export const usePreferencesStore = defineStore('preferences', () => {
         if (typeof raw.defaultAuthor === 'string') defaultAuthor.value = raw.defaultAuthor
         if (raw.docsView === 'grid' || raw.docsView === 'list') docsView.value = raw.docsView
         if (raw.pageView === 'paged' || raw.pageView === 'continuous') pageView.value = raw.pageView
+        if (raw.pageMargin === 'narrow' || raw.pageMargin === 'normal' || raw.pageMargin === 'wide')
+          pageMargin.value = raw.pageMargin as PageMargin
       }
     } catch {
       /* first run */
@@ -42,7 +46,8 @@ export const usePreferencesStore = defineStore('preferences', () => {
         focusWidth: focusWidth.value,
         defaultAuthor: defaultAuthor.value,
         docsView: docsView.value,
-        pageView: pageView.value
+        pageView: pageView.value,
+        pageMargin: pageMargin.value
       })
     } catch {
       /* non-fatal */
@@ -55,6 +60,10 @@ export const usePreferencesStore = defineStore('preferences', () => {
   }
   function setSpellcheck(on: boolean): void {
     spellcheck.value = on
+    void persist()
+  }
+  function setPageMargin(v: PageMargin): void {
+    pageMargin.value = v
     void persist()
   }
   function setPageView(v: PageView): void {
@@ -81,6 +90,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     defaultAuthor,
     docsView,
     pageView,
+    pageMargin,
     loaded,
     load,
     setAutosave,
@@ -88,6 +98,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     setFocusWidth,
     setDefaultAuthor,
     setDocsView,
-    setPageView
+    setPageView,
+    setPageMargin
   }
 })

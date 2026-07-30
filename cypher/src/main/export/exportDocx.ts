@@ -5,6 +5,8 @@ import {
   Paragraph,
   TextRun,
   ImageRun,
+  Bookmark,
+  InternalHyperlink,
   HeadingLevel,
   AlignmentType,
   PageBreak
@@ -38,6 +40,7 @@ function runsFor(block: Block): TextRun[] {
 }
 
 function blockToParagraph(block: Block): Paragraph {
+  if (block.kind === 'pagebreak') return new Paragraph({ children: [new PageBreak()] })
   const children = runsFor(block)
   switch (block.kind) {
     case 'heading':
@@ -111,6 +114,43 @@ export async function exportDocx(
     children.push(new Paragraph({ children: [new PageBreak()] }))
   }
 
+  // A bookmark-backed contents page. Word's TOC field needs the reader to
+  // refresh fields before it shows anything; internal hyperlinks to bookmarks
+  // work the moment the file opens, and Ctrl-click jumps as expected.
+  if (options.tableOfContents) {
+    children.push(
+      new Paragraph({
+        children: [new TextRun({ text: 'Contents', bold: true, size: 32 })],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 360 }
+      })
+    )
+    for (const group of data.groups) {
+      if (options.volumeHeadings && group.volumeTitle) {
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: group.volumeTitle, bold: true })],
+            spacing: { before: 200, after: 80 }
+          })
+        )
+      }
+      for (const chapter of group.chapters) {
+        children.push(
+          new Paragraph({
+            children: [
+              new InternalHyperlink({
+                anchor: `ch${chapter.id}`,
+                children: [new TextRun({ text: chapter.title, style: 'Hyperlink' })]
+              })
+            ],
+            spacing: { after: 60 }
+          })
+        )
+      }
+    }
+    children.push(new Paragraph({ children: [new PageBreak()] }))
+  }
+
   let first = true
   for (const group of data.groups) {
     if (options.volumeHeadings && group.volumeTitle) {
@@ -129,7 +169,16 @@ export async function exportDocx(
       if (!first) children.push(new Paragraph({ children: [new PageBreak()] }))
       first = false
       children.push(
-        new Paragraph({ text: chapter.title, heading: HeadingLevel.HEADING_1, spacing: { after: 240 } })
+        new Paragraph({
+          heading: HeadingLevel.HEADING_1,
+          spacing: { after: 240 },
+          children: [
+            new Bookmark({
+              id: `ch${chapter.id}`,
+              children: [new TextRun(chapter.title)]
+            })
+          ]
+        })
       )
       if (options.includeSynopsis && chapter.synopsis) {
         children.push(

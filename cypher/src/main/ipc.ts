@@ -95,6 +95,12 @@ import {
   absoluteAssetPath
 } from './assets'
 import { exportBook, exportSection } from './export'
+import { printHtml, previewHtml } from './print'
+import { importDocx } from './docx'
+import { exportDocumentAs } from './export/exportDocument'
+import { gatherBook } from './export/gather'
+import { bookToHtml, documentToHtml } from './export/bookHtml'
+import { contentToHtml } from './export/tiptapToHtml'
 import {
   openWindow,
   windowCount,
@@ -378,6 +384,24 @@ export function registerIpcHandlers(): void {
     ) => exportSection(bookId, kind, format, options)
   )
 
+  // Printing — same HTML pipeline as PDF export, so output matches
+  handle('print:document', (_e, id: number) => {
+    const doc = getDocument(id)
+    if (!doc) return { ok: false, reason: 'Document not found.' }
+    return printHtml(documentToHtml(doc.title, contentToHtml(doc.content)))
+  })
+  handle('print:previewDocument', (_e, id: number) => {
+    const doc = getDocument(id)
+    if (!doc) return null
+    return previewHtml(documentToHtml(doc.title, contentToHtml(doc.content)))
+  })
+  handle('print:book', (_e, bookId: number, options: ExportOptions) => {
+    const data = gatherBook(bookId, options.chapterIds)
+    if (!data) return { ok: false, reason: 'Book not found.' }
+    if (!data.chapters.length) return { ok: false, reason: 'No chapters selected.' }
+    return printHtml(bookToHtml(data, options))
+  })
+
   // Trash
   handle('trash:list', () => listTrash())
   handle('trash:restore', (_e, kind: TrashKind, id: number) => restoreTrashItem(kind, id))
@@ -409,6 +433,10 @@ export function registerIpcHandlers(): void {
   handle('docs:duplicate', (_e, id: number) => duplicateDocument(id))
   handle('docs:delete', (_e, id: number) => deleteDocument(id))
   handle('docs:importImage', () => importDocImage())
+  handle('docs:importDocx', () => importDocx())
+  handle('docs:exportAs', (_e, id: number, format: 'docx' | 'pdf') =>
+    exportDocumentAs(id, format)
+  )
 
   // Notes
   handle('notes:list', (_e, ownerType: string, ownerId: number) =>

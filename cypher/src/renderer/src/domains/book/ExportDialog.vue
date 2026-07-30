@@ -7,7 +7,8 @@ import {
   Loader2,
   Check,
   AlertCircle,
-  ListChecks
+  ListChecks,
+  Printer
 } from 'lucide-vue-next'
 import { useChaptersStore } from '@/stores/chapters'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -98,6 +99,29 @@ onMounted(() => {
 })
 
 const dotFor = (s: ChapterStatus): string => STATUSES.find((x) => x.key === s)?.dot ?? 'bg-amber-400'
+
+/** Prints the same selection, through the same HTML the PDF export uses. */
+async function printSelection(): Promise<void> {
+  busy.value = true
+  done.value = null
+  error.value = null
+  try {
+    const res = await window.cypher.printer.book(props.bookId, {
+      author: author.value,
+      titlePage: titlePage.value,
+      includeCover: includeCover.value,
+      volumeHeadings: volumeHeadings.value,
+      includeSynopsis: includeSynopsis.value,
+      tableOfContents: tableOfContents.value,
+      chapterIds: [...selected.value]
+    })
+    if (!res.ok && res.reason) error.value = res.reason
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    busy.value = false
+  }
+}
 
 async function run(): Promise<void> {
   busy.value = true
@@ -248,6 +272,14 @@ async function run(): Promise<void> {
       </div>
 
       <div class="flex justify-end gap-2 border-t border-border px-6 py-4">
+        <button
+          class="mr-auto flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm text-ink-dim hover:text-ink disabled:opacity-60"
+          :disabled="busy || !selected.size"
+          title="Send this selection to a printer"
+          @click="printSelection"
+        >
+          <Printer :size="15" /> Print
+        </button>
         <button class="rounded-xl px-4 py-2 text-sm font-medium text-ink-dim hover:text-ink" @click="emit('close')">
           {{ done ? 'Close' : 'Cancel' }}
         </button>

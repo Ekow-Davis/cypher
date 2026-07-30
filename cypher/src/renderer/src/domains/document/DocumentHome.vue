@@ -6,6 +6,7 @@ import {
   FileText,
   LayoutGrid,
   Rows3,
+  FolderOpen,
   Trash2,
   Copy,
   Search,
@@ -49,6 +50,18 @@ function fmt(iso: string): string {
   })
 }
 
+/** Imports a Word file as a brand-new document and opens it. */
+async function importDoc(): Promise<void> {
+  const result = await window.cypher.docs.importDocx()
+  if (!result) return
+  const created = await store.create()
+  if (!created) return
+  await store.rename(created.id, result.title)
+  // Content is set by the editor, which parses the HTML into the document model.
+  void router.push({ path: `/document/${created.id}`, query: { importHtml: '1' } })
+  sessionStorage.setItem('cypher:pendingImport', result.html)
+}
+
 async function newDoc(): Promise<void> {
   const created = await store.create()
   if (created) void router.push(`/document/${created.id}`)
@@ -63,7 +76,14 @@ function openInWindow(id: number): void {
     <header class="flex items-center gap-3 border-b border-border bg-surface px-6 py-4">
       <h1 class="text-xl font-bold">Documents</h1>
       <button
-        class="ml-auto flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent transition-opacity hover:opacity-90"
+        class="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-ink-dim transition-colors hover:text-ink"
+        title="Import a Word document"
+        @click="importDoc"
+      >
+        <FolderOpen :size="16" /> Import .docx
+      </button>
+      <button
+        class="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent transition-opacity hover:opacity-90"
         @click="newDoc"
       >
         <Plus :size="16" /> New document

@@ -184,6 +184,15 @@ const cypher = {
       ipcRenderer.invoke('export:section', bookId, kind, format, options)
   },
 
+  printer: {
+    document: (id: number): Promise<{ ok: boolean; reason?: string }> =>
+      ipcRenderer.invoke('print:document', id),
+    previewDocument: (id: number): Promise<ArrayBuffer | null> =>
+      ipcRenderer.invoke('print:previewDocument', id),
+    book: (bookId: number, options: ExportOptions): Promise<{ ok: boolean; reason?: string }> =>
+      ipcRenderer.invoke('print:book', bookId, options)
+  },
+
   trash: {
     list: (): Promise<TrashItem[]> => ipcRenderer.invoke('trash:list'),
     restore: (kind: TrashKind, id: number): Promise<boolean> =>
@@ -224,7 +233,14 @@ const cypher = {
       ipcRenderer.invoke('docs:saveContent', id, content),
     duplicate: (id: number): Promise<Doc | null> => ipcRenderer.invoke('docs:duplicate', id),
     remove: (id: number): Promise<void> => ipcRenderer.invoke('docs:delete', id),
-    importImage: (): Promise<string | null> => ipcRenderer.invoke('docs:importImage')
+    importImage: (): Promise<string | null> => ipcRenderer.invoke('docs:importImage'),
+    importDocx: (): Promise<{ title: string; html: string; warnings: number } | null> =>
+      ipcRenderer.invoke('docs:importDocx'),
+    exportAs: (
+      id: number,
+      format: 'docx' | 'pdf'
+    ): Promise<{ path: string | null; cancelled?: boolean; error?: string }> =>
+      ipcRenderer.invoke('docs:exportAs', id, format)
   },
 
   notes: {

@@ -25,6 +25,18 @@ import {
   BookOpen,
   ScrollText,
   FileDown,
+  Printer,
+  FileSearch,
+  Search,
+  ChevronUp,
+  ChevronDown,
+  Replace,
+  FolderOpen,
+  FileType,
+  Save,
+  ListTree,
+  RefreshCw,
+  PanelLeft,
   Table as TableIcon,
   ImagePlus,
   Rows3,
@@ -56,6 +68,10 @@ import {
 import { useDocumentsStore } from '@/stores/documents'
 import { usePreferencesStore } from '@/stores/preferences'
 import { assetUrl } from '@/lib/assets'
+import { Pagination, type PageLayout } from '@/lib/pagination'
+import { FindReplace, findKey, findMatches, type Match } from '@/lib/findReplace'
+import { TableOfContents, type TocEntry } from '@/lib/toc'
+import PrintPreview from './PrintPreview.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -166,7 +182,17 @@ const editor = useEditor({
     CharacterCount,
     TableKit.configure({ table: { resizable: true } }),
     PageBreak,
-    SizedImage.configure({ inline: false, allowBase64: false }),
+    // reads prefs live, so toggling the view re-paginates without a reload
+    Pagination.configure({
+      enabled: () => prefs.pageView === 'paged',
+      onLayout: (l: PageLayout) => {
+        layout.value = l
+        pageCount.value = l.pages
+      }
+    }),
+    FindReplace,
+    TableOfContents,
+    SizedImage.configure({ inline: false, allowBase64: true }),
     Placeholder.configure({ placeholder: 'Start writing…' })
   ],
   content: '',
@@ -216,6 +242,14 @@ async function boot(): Promise<void> {
   editor.value.commands.setContent(content as never)
   status.value = 'saved'
   loadingContent = false
+
+  // A document created by importing arrives with its HTML parked for us.
+  const pending = sessionStorage.getItem('cypher:pendingImport')
+  if (pending && route.query.importHtml) {
+    sessionStorage.removeItem('cypher:pendingImport')
+    editor.value.commands.setContent(pending)
+    void saveNow()
+  }
 }
 
 watch(() => editor.value, (ed) => { if (ed && loadedId === null) void boot() }, { immediate: true })
@@ -248,11 +282,13 @@ function setLink(): void {
   editor.value?.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
 }
 
-type RibbonTab = 'home' | 'insert' | 'layout'
+type RibbonTab = 'file' | 'home' | 'insert' | 'references' | 'layout'
 const ribbonTab = ref<RibbonTab>('home')
 const RIBBON_TABS: { key: RibbonTab; label: string }[] = [
+  { key: 'file', label: 'File' },
   { key: 'home', label: 'Home' },
   { key: 'insert', label: 'Insert' },
+  { key: 'references', label: 'References' },
   { key: 'layout', label: 'Layout' }
 ]
 
@@ -315,6 +351,191 @@ function insertCover(kind: string): void {
     .run()
 }
 
+const printing = ref(false)
+const busyFile = ref(false)
+const showOutline = ref(false)
+
+interface Heading {
+  offset: number
+  level: number
+  text: string
+  page: number
+}
+
+/** Every heading in the document, with the page the paginator put it on. */
+const headings = computed<Heading[]>(() => {
+  const ed = editor.value
+  if (!ed) return []
+  const pageOf = new Map(layout.value.blocks.map((b) => [b.offset, b.page]))
+  const out: Heading[] = []
+  ed.state.doc.forEach((node, offset) => {
+    if (node.type.name !== 'heading') return
+    const text = node.textContent.trim()
+    if (!text) return
+    out.push({
+      offset,
+      level: Number(node.attrs.level ?? 1),
+      text,
+      page: pageOf.get(offset) ?? 1
+    })
+  })
+  return out
+})
+
+function tocEntries(): TocEntry[] {
+  return headings.value.map((h) => ({ text: h.text, level: h.level, page: h.page }))
+}
+
+function insertToc(): void {
+  editor.value?.chain().focus().insertTableOfContents(tocEntries()).run()
+}
+
+function refreshToc(): void {
+  const ok = editor.value?.chain().focus().refreshTableOfContents(tocEntries()).run()
+  if (!ok) insertToc()
+}
+
+function goToHeading(h: Heading): void {
+  const ed = editor.value
+  if (!ed) return
+  ed.chain().focus().setTextSelection(h.offset + 1).run()
+  const dom = ed.view.nodeDOM(h.offset)
+  if (dom instanceof HTMLElement) dom.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+const fileNotice = ref<string | null>(null)
+
+function notify(message: string): void {
+  fileNotice.value = message
+  setTimeout(() => (fileNotice.value = null), 5000)
+}
+
+/** Replaces this document's body with an imported Word file. */
+async function importDocx(): Promise<void> {
+  busyFile.value = true
+  try {
+    const result = await window.cypher.docs.importDocx()
+    if (!result) return
+    editor.value?.commands.setContent(result.html)
+    await saveNow()
+    notify(
+      result.warnings
+        ? `Imported with ${result.warnings} formatting note(s) — check the result.`
+        : 'Imported.'
+    )
+  } catch (e) {
+    notify(e instanceof Error ? e.message : String(e))
+  } finally {
+    busyFile.value = false
+  }
+}
+
+async function exportAs(format: 'docx' | 'pdf'): Promise<void> {
+  if (loadedId == null) return
+  if (status.value !== 'saved') await saveNow()
+  busyFile.value = true
+  try {
+    const res = await window.cypher.docs.exportAs(loadedId, format)
+    if (res.cancelled) return
+    notify(res.error ? res.error : `Saved to ${res.path}`)
+  } finally {
+    busyFile.value = false
+  }
+}
+const showFind = ref(false)
+const findQuery = ref('')
+const replaceWith = ref('')
+const caseSensitive = ref(false)
+const matches = ref<Match[]>([])
+const activeMatch = ref(0)
+
+function pushMatches(): void {
+  const ed = editor.value
+  if (!ed) return
+  ed.view.dispatch(
+    ed.state.tr.setMeta(findKey, { matches: matches.value, active: activeMatch.value })
+  )
+}
+
+function runFind(): void {
+  const ed = editor.value
+  if (!ed) return
+  matches.value = findQuery.value ? findMatches(ed.state, findQuery.value, caseSensitive.value) : []
+  activeMatch.value = 0
+  pushMatches()
+  scrollToMatch()
+}
+
+function scrollToMatch(): void {
+  const ed = editor.value
+  const hit = matches.value[activeMatch.value]
+  if (!ed || !hit) return
+  const dom = ed.view.domAtPos(hit.from).node as HTMLElement
+  const el = dom.nodeType === 1 ? dom : dom.parentElement
+  el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+}
+
+function stepMatch(delta: number): void {
+  if (!matches.value.length) return
+  activeMatch.value =
+    (activeMatch.value + delta + matches.value.length) % matches.value.length
+  pushMatches()
+  scrollToMatch()
+}
+
+function replaceCurrent(): void {
+  const ed = editor.value
+  const hit = matches.value[activeMatch.value]
+  if (!ed || !hit) return
+  ed.chain().focus().insertContentAt({ from: hit.from, to: hit.to }, replaceWith.value).run()
+  runFind()
+}
+
+/** Replaces from the end so earlier positions stay valid as the text shifts. */
+function replaceAll(): void {
+  const ed = editor.value
+  if (!ed || !matches.value.length) return
+  const chain = ed.chain().focus()
+  for (const hit of [...matches.value].reverse()) {
+    chain.insertContentAt({ from: hit.from, to: hit.to }, replaceWith.value)
+  }
+  chain.run()
+  runFind()
+}
+
+function closeFind(): void {
+  showFind.value = false
+  matches.value = []
+  pushMatches()
+}
+const pageCount = ref(1)
+const layout = ref<PageLayout>({ pages: 1, cycle: 0, sheet: 0 })
+const MARGIN_PRESETS = [
+  { key: 'narrow', label: 'Narrow', inches: 0.6 },
+  { key: 'normal', label: 'Normal', inches: 1 },
+  { key: 'wide', label: 'Wide', inches: 1.3 }
+] as const
+const marginIn = computed(
+  () => MARGIN_PRESETS.find((m) => m.key === prefs.pageMargin)?.inches ?? 1
+)
+const showPreview = ref(false)
+
+async function openPreview(): Promise<void> {
+  if (loadedId == null) return
+  if (status.value !== 'saved') await saveNow()
+  showPreview.value = true
+}
+
+async function printDocument(): Promise<void> {
+  if (loadedId == null) return
+  if (status.value !== 'saved') await saveNow()
+  printing.value = true
+  try {
+    await window.cypher.printer.document(loadedId)
+  } finally {
+    printing.value = false
+  }
+}
+
 function insertTable(): void {
   editor.value?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
 }
@@ -329,6 +550,14 @@ async function insertImage(): Promise<void> {
 function setImageWidth(width: string | null): void {
   editor.value?.chain().focus().updateAttributes('image', { width }).run()
 }
+
+watch(
+  () => prefs.pageView,
+  () => {
+    // nudge the plugin so it re-runs against the new mode
+    editor.value?.view.dispatch(editor.value.state.tr)
+  }
+)
 
 const inTable = computed(() => !!editor.value?.isActive('table'))
 const onImage = computed(() => !!editor.value?.isActive('image'))
@@ -368,6 +597,11 @@ function onKeydown(e: KeyboardEvent): void {
     e.preventDefault()
     void saveNow()
   }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+    e.preventDefault()
+    showFind.value = true
+  }
+  if (e.key === 'Escape' && showFind.value) closeFind()
 }
 
 onMounted(async () => {
@@ -425,6 +659,33 @@ onBeforeUnmount(() => {
       >
         {{ t.label }}
       </button>
+    </div>
+
+    <!-- FILE -->
+    <div
+      v-if="editor && ribbonTab === 'file'"
+      class="flex flex-wrap items-center gap-1 border-b border-border bg-surface-2/60 px-3 py-1.5"
+    >
+      <button class="doc-btn" :disabled="busyFile" title="Replace this document with a Word file" @click="importDocx">
+        <FolderOpen :size="15" /> <span class="ml-1 text-xs">Import .docx</span>
+      </button>
+      <span class="doc-sep" />
+      <button class="doc-btn" :disabled="busyFile" title="Export as Word" @click="exportAs('docx')">
+        <Save :size="15" /> <span class="ml-1 text-xs">Export Word</span>
+      </button>
+      <button class="doc-btn" :disabled="busyFile" title="Export as PDF" @click="exportAs('pdf')">
+        <FileType :size="15" /> <span class="ml-1 text-xs">Export PDF</span>
+      </button>
+      <span class="doc-sep" />
+      <button class="doc-btn" title="Print preview" @click="openPreview">
+        <FileSearch :size="15" /> <span class="ml-1 text-xs">Preview</span>
+      </button>
+      <button class="doc-btn" :disabled="printing" title="Print" @click="printDocument">
+        <Printer :size="15" /> <span class="ml-1 text-xs">{{ printing ? 'Printing…' : 'Print' }}</span>
+      </button>
+      <span v-if="fileNotice" class="ml-auto max-w-sm truncate text-[11px] text-ink-dim">
+        {{ fileNotice }}
+      </span>
     </div>
 
     <!-- HOME -->
@@ -561,6 +822,15 @@ onBeforeUnmount(() => {
       >
         <RemoveFormatting :size="15" />
       </button>
+      <span class="doc-sep" />
+      <button
+        class="doc-btn"
+        :class="showFind ? 'doc-btn-on' : ''"
+        title="Find & replace (Ctrl+F)"
+        @click="showFind ? closeFind() : (showFind = true)"
+      >
+        <Search :size="15" />
+      </button>
     </div>
 
     <!-- INSERT -->
@@ -606,6 +876,32 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
+    <!-- REFERENCES -->
+    <div
+      v-if="editor && ribbonTab === 'references'"
+      class="flex flex-wrap items-center gap-1 border-b border-border bg-surface-2/60 px-3 py-1.5"
+    >
+      <button class="doc-btn" title="Insert a table of contents here" @click="insertToc">
+        <ListTree :size="15" /> <span class="ml-1 text-xs">Insert contents</span>
+      </button>
+      <button class="doc-btn" title="Update the table of contents" @click="refreshToc">
+        <RefreshCw :size="15" /> <span class="ml-1 text-xs">Update</span>
+      </button>
+      <span class="doc-sep" />
+      <button
+        class="doc-btn"
+        :class="showOutline ? 'doc-btn-on' : ''"
+        title="Show the document outline"
+        @click="showOutline = !showOutline"
+      >
+        <PanelLeft :size="15" /> <span class="ml-1 text-xs">Navigation</span>
+      </button>
+      <span class="ml-auto text-[10px] text-ink-dim">
+        {{ headings.length }} heading{{ headings.length === 1 ? '' : 's' }} · page numbers update
+        when you press Update
+      </span>
+    </div>
+
     <!-- LAYOUT -->
     <div
       v-if="editor && ribbonTab === 'layout'"
@@ -639,6 +935,28 @@ onBeforeUnmount(() => {
       <button class="doc-btn" title="Zoom in" @click="zoom = Math.min(200, zoom + 10)">
         <Plus :size="14" />
       </button>
+      <span class="doc-sep" />
+      <span class="text-xs text-ink-dim">Margins:</span>
+      <div class="flex items-center gap-1 rounded-lg bg-surface p-0.5">
+        <button
+          v-for="m in MARGIN_PRESETS"
+          :key="m.key"
+          class="rounded-md px-2 py-1 text-xs transition-colors"
+          :class="prefs.pageMargin === m.key ? 'bg-surface-2 text-accent' : 'text-ink-dim hover:text-ink'"
+          :title="`${m.inches}in margins`"
+          @click="prefs.setPageMargin(m.key)"
+        >
+          {{ m.label }}
+        </button>
+      </div>
+      <span class="doc-sep" />
+      <button class="doc-btn" title="Print preview" @click="openPreview">
+        <FileSearch :size="15" /> <span class="ml-1 text-xs">Preview</span>
+      </button>
+      <button class="doc-btn" :disabled="printing" title="Print this document" @click="printDocument">
+        <Printer :size="15" /> <span class="ml-1 text-xs">{{ printing ? 'Printing…' : 'Print' }}</span>
+      </button>
+
       <p class="ml-auto max-w-xs text-[10px] leading-tight text-ink-dim">
         Paged view marks where each page ends. Text still flows across the line — insert a page
         break to force content onto the next page.
@@ -710,16 +1028,115 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- page -->
-    <div class="flex-1 overflow-auto bg-surface-2/50 py-8">
-      <div class="cypher-page mx-auto" :style="{ zoom: zoom / 100 }">
-        <EditorContent :editor="editor" :class="prefs.pageView === 'paged' ? 'paged' : ''" />
+    <div class="flex min-h-0 flex-1">
+      <aside
+        v-if="showOutline"
+        class="w-60 shrink-0 overflow-auto border-r border-border bg-surface py-2"
+      >
+        <div class="px-4 py-1 text-xs font-semibold uppercase tracking-wider text-ink-dim">
+          Navigation
+        </div>
+        <p v-if="!headings.length" class="px-4 py-3 text-xs text-ink-dim">
+          Headings you add will appear here.
+        </p>
+        <button
+          v-for="h in headings"
+          :key="h.offset"
+          class="flex w-full items-baseline gap-2 py-1 pr-3 text-left text-xs text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+          :style="{ paddingLeft: 0.75 + (h.level - 1) * 0.7 + 'rem' }"
+          @click="goToHeading(h)"
+        >
+          <span class="min-w-0 flex-1 truncate">{{ h.text }}</span>
+          <span class="shrink-0 tabular-nums opacity-60">{{ h.page }}</span>
+        </button>
+      </aside>
+
+      <div class="flex-1 overflow-auto bg-surface-2/50 py-8">
+      <div
+        class="doc-canvas mx-auto"
+        :style="{ zoom: zoom / 100, '--doc-margin': marginIn + 'in' }"
+      >
+        <!-- measured, never shown; inside the canvas so zoom is accounted for -->
+        <div class="m-page" aria-hidden="true" />
+        <div class="m-margin" aria-hidden="true" />
+        <div class="m-gap" aria-hidden="true" />
+
+        <!-- the sheets themselves, floating on the desk behind the text -->
+        <div class="doc-sheets" aria-hidden="true">
+          <!-- Positioned from the same geometry the paginator uses, so a sheet
+               edge can never drift away from where the text actually breaks. -->
+          <template v-if="prefs.pageView === 'paged' && layout.cycle > 0">
+            <div
+              v-for="n in pageCount"
+              :key="n"
+              class="doc-sheet"
+              :style="{ top: (n - 1) * layout.cycle + 'px', height: layout.sheet + 'px' }"
+            />
+          </template>
+          <div v-else class="doc-sheet doc-sheet-fill" />
+        </div>
+
+        <EditorContent :editor="editor" class="doc-layer" />
+        </div>
       </div>
     </div>
+
+    <!-- find & replace -->
+    <div
+      v-if="showFind"
+      class="flex flex-wrap items-center gap-2 border-b border-border bg-surface-2/80 px-3 py-2 text-xs"
+    >
+      <Search :size="14" class="shrink-0 text-ink-dim" />
+      <input
+        v-model="findQuery"
+        placeholder="Find"
+        class="w-40 rounded-lg border border-border bg-surface px-2 py-1 outline-none focus:border-accent-line"
+        @input="runFind"
+        @keydown.enter.prevent="stepMatch(1)"
+      />
+      <span class="tabular-nums text-ink-dim">
+        {{ matches.length ? `${activeMatch + 1} of ${matches.length}` : 'No results' }}
+      </span>
+      <button class="doc-btn" title="Previous" @click="stepMatch(-1)"><ChevronUp :size="14" /></button>
+      <button class="doc-btn" title="Next" @click="stepMatch(1)"><ChevronDown :size="14" /></button>
+
+      <span class="doc-sep" />
+      <Replace :size="14" class="shrink-0 text-ink-dim" />
+      <input
+        v-model="replaceWith"
+        placeholder="Replace with"
+        class="w-40 rounded-lg border border-border bg-surface px-2 py-1 outline-none focus:border-accent-line"
+      />
+      <button class="doc-btn" :disabled="!matches.length" @click="replaceCurrent">Replace</button>
+      <button class="doc-btn" :disabled="!matches.length" @click="replaceAll">All</button>
+
+      <label class="ml-2 flex items-center gap-1.5">
+        <input
+          v-model="caseSensitive"
+          type="checkbox"
+          class="h-3.5 w-3.5"
+          style="accent-color: var(--color-accent)"
+          @change="runFind"
+        />
+        Match case
+      </label>
+
+      <button class="doc-btn ml-auto" title="Close (Esc)" @click="closeFind"><X :size="14" /></button>
+    </div>
+
+    <PrintPreview
+      v-if="showPreview && loadedId !== null"
+      :doc-id="loadedId"
+      @close="showPreview = false"
+    />
 
     <!-- status bar -->
     <div class="flex items-center gap-4 border-t border-border bg-surface px-4 py-1.5 text-xs text-ink-dim">
       <span class="tabular-nums">{{ wordCount.toLocaleString() }} words</span>
       <span class="tabular-nums">{{ charCount.toLocaleString() }} characters</span>
+      <span v-if="prefs.pageView === 'paged'" class="tabular-nums">
+        {{ pageCount }} page{{ pageCount === 1 ? '' : 's' }}
+      </span>
       <div class="ml-auto flex items-center gap-1">
         <button class="doc-btn" title="Zoom out" @click="zoom = Math.max(50, zoom - 10)">
           <Minus :size="13" />

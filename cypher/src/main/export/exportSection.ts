@@ -35,6 +35,7 @@ function runsFor(block: Block): TextRun[] {
 }
 
 function blockToParagraph(block: Block): Paragraph {
+  if (block.kind === 'pagebreak') return new Paragraph({ children: [new PageBreak()] })
   const children = runsFor(block)
   switch (block.kind) {
     case 'heading':

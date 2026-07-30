@@ -82,6 +82,27 @@ function renderNode(node: Node): string {
       return '<br/>'
     case 'mention':
       return `<span class="mention">${escapeHtml(String(node.attrs?.label ?? ''))}</span>`
+    case 'pageBreak':
+      // print styles turn this into a real break-after: page
+      return '<div data-page-break="true"></div>'
+    case 'toc': {
+      const entries = (node.attrs?.entries ?? []) as {
+        text: string
+        level: number
+        page: number
+      }[]
+      const rows = entries
+        .map(
+          (e) =>
+            `<div class="toc-row toc-level-${e.level}"><span class="toc-text">${escapeHtml(
+              e.text
+            )}</span><span class="toc-dots"></span><span class="toc-page">${e.page}</span></div>`
+        )
+        .join('')
+      return `<div class="toc-block"><div class="toc-title">${escapeHtml(
+        String(node.attrs?.title ?? 'Contents')
+      )}</div>${rows}</div>`
+    }
     default:
       return renderNodes(node.content)
   }
@@ -111,7 +132,7 @@ export function contentToHtml(stored: string): string {
 
 /** Block-level structure used by the docx exporter. */
 export interface Block {
-  kind: 'paragraph' | 'heading' | 'quote' | 'bullet' | 'ordered' | 'code'
+  kind: 'paragraph' | 'heading' | 'quote' | 'bullet' | 'ordered' | 'code' | 'pagebreak'
   level?: number
   runs: { text: string; bold?: boolean; italic?: boolean; strike?: boolean; code?: boolean }[]
 }
@@ -185,6 +206,28 @@ export function contentToBlocks(stored: string): Block[] {
       case 'codeBlock':
         blocks.push({ kind: 'code', runs: [{ text: plainText(node), code: true }] })
         break
+      case 'pageBreak':
+        blocks.push({ kind: 'pagebreak', runs: [] })
+        break
+      case 'toc': {
+        const entries = (node.attrs?.entries ?? []) as {
+          text: string
+          level: number
+          page: number
+        }[]
+        blocks.push({
+          kind: 'heading',
+          level: 1,
+          runs: [{ text: String(node.attrs?.title ?? 'Contents'), bold: true }]
+        })
+        for (const e of entries) {
+          blocks.push({
+            kind: 'paragraph',
+            runs: [{ text: `${'    '.repeat(Math.max(0, e.level - 1))}${e.text}\t${e.page}` }]
+          })
+        }
+        break
+      }
       default:
         node.content?.forEach((c) => visit(c, listKind))
         break

@@ -197,17 +197,10 @@ body {
   outline: none;
 }
 
-/* The page itself stays paper-white in either theme — it's what will be
-   printed or exported, so showing it any other way would mislead. */
-.cypher-page {
-  width: 8.5in;
-  min-height: 11in;
-  max-width: 100%;
-  padding: 1in;
-  background: #ffffff;
+/* Text stays dark-on-paper in either theme — the sheet is what gets printed,
+   so rendering it any other way would misrepresent the output. */
+.doc-layer {
   color: #111111;
-  box-shadow: 0 6px 28px rgb(0 0 0 / 28%);
-  border-radius: 2px;
 }
 .cypher-doc {
   min-height: 9in;
@@ -301,20 +294,64 @@ body {
   outline: 2px solid #2563eb;
 }
 
-/* ---------- Paged view & page breaks ----------
-   Marks where each page ends rather than reflowing content into separate
-   sheets: true pagination means measuring and splitting the document, which a
-   contenteditable surface can't do for free. The line tells you where the page
-   boundary falls; a page break forces content past it. */
-.cypher-doc.paged {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent calc(9in - 1px),
-    rgb(0 0 0 / 16%) calc(9in - 1px),
-    rgb(0 0 0 / 16%) 9in
-  );
-  background-repeat: repeat-y;
+/* ---------- Paged view: floating sheets ----------
+   Pages are drawn as their own fixed-height cards behind the text, so a short
+   page still occupies a whole sheet and the spacing between pages never
+   changes with content — matching what actually prints. */
+.doc-canvas {
+  position: relative;
+  width: 8.5in;
+  max-width: 100%;
+  /* one source of truth for the page margin; the probe and the padding both
+     read it, so measurement can never drift from what's rendered */
+  --doc-margin: 1in;
+}
+.m-page,
+.m-margin,
+.m-gap {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  width: 0;
+}
+.m-page { height: 11in; }
+.m-margin { height: var(--doc-margin); }
+.m-gap { height: 0.45in; }
+
+.doc-sheets {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.doc-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border-radius: 2px;
+  box-shadow: 0 4px 22px rgb(0 0 0 / 32%);
+}
+/* continuous mode: one sheet that simply grows with the text */
+.doc-sheet-fill {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  min-height: 11in;
+}
+
+.doc-layer {
+  position: relative;
+  z-index: 1;
+  padding: var(--doc-margin);
+}
+
+/* The spacer that carries text over to the next sheet. It is deliberately
+   transparent — the desk already shows through the gap between cards. */
+.doc-page-gap {
+  background: transparent;
+  user-select: none;
+  pointer-events: none;
 }
 
 .cypher-page-break {
@@ -341,10 +378,10 @@ body {
   border-top-color: #2563eb;
 }
 
-/* Printing and PDF export honour breaks for real. */
 @media print {
-  .cypher-doc.paged {
-    background-image: none;
+  .doc-page-gap,
+  .doc-sheets {
+    display: none;
   }
   .cypher-page-break {
     break-after: page;
@@ -355,4 +392,53 @@ body {
   .cypher-page-break::after {
     content: none;
   }
+}
+
+/* ---------- Find & replace ---------- */
+.find-hit {
+  background: rgb(250 204 21 / 45%);
+  border-radius: 2px;
+}
+.find-hit-active {
+  background: rgb(249 115 22 / 65%);
+  box-shadow: 0 0 0 1px rgb(249 115 22 / 90%);
+}
+
+/* ---------- Table of contents ---------- */
+.toc-block {
+  margin: 1em 0 1.4em;
+}
+.toc-title {
+  font-size: 1.35em;
+  font-weight: 700;
+  margin-bottom: 0.6em;
+}
+.toc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  line-height: 1.9;
+}
+.toc-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toc-dots {
+  flex: 1 1 auto;
+  border-bottom: 1px dotted currentColor;
+  opacity: 0.45;
+  transform: translateY(-0.25em);
+}
+.toc-page {
+  font-variant-numeric: tabular-nums;
+}
+.toc-level-2 { padding-left: 1.2em; }
+.toc-level-3 { padding-left: 2.4em; }
+.toc-level-4,
+.toc-level-5,
+.toc-level-6 { padding-left: 3.6em; }
+.toc-block.ProseMirror-selectednode {
+  outline: 2px solid #2563eb;
+  border-radius: 3px;
 }
