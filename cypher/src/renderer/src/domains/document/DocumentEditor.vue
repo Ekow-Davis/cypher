@@ -37,6 +37,8 @@ import {
   ListTree,
   RefreshCw,
   PanelLeft,
+  Heading,
+  StickyNote,
   Table as TableIcon,
   ImagePlus,
   Rows3,
@@ -71,6 +73,7 @@ import { assetUrl } from '@/lib/assets'
 import { Pagination, type PageLayout } from '@/lib/pagination'
 import { FindReplace, findKey, findMatches, type Match } from '@/lib/findReplace'
 import { TableOfContents, type TocEntry } from '@/lib/toc'
+import { Footnote } from '@/lib/footnote'
 import PrintPreview from './PrintPreview.vue'
 
 const route = useRoute()
@@ -192,6 +195,7 @@ const editor = useEditor({
     }),
     FindReplace,
     TableOfContents,
+    Footnote,
     SizedImage.configure({ inline: false, allowBase64: true }),
     Placeholder.configure({ placeholder: 'Start writing…' })
   ],
@@ -230,6 +234,8 @@ async function boot(): Promise<void> {
   loadingContent = true
   loadedId = doc.id
   store.openId = doc.id
+  header.value = doc.header ?? ''
+  footer.value = doc.footer ?? ''
   title.value = doc.title
   let content: unknown = ''
   if (doc.content) {
@@ -354,6 +360,69 @@ function insertCover(kind: string): void {
 const printing = ref(false)
 const busyFile = ref(false)
 const showOutline = ref(false)
+const header = ref('')
+const footer = ref('')
+let metaTimer: ReturnType<typeof setTimeout> | null = null
+const showNotes = ref(false)
+
+interface NoteItem {
+  pos: number
+  index: number
+  text: string
+}
+
+/** Footnotes in document order; the number is the order, never stored. */
+const footnotes = computed<NoteItem[]>(() => {
+  const ed = editor.value
+  if (!ed) return []
+  const out: NoteItem[] = []
+  ed.state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'footnote') return
+    out.push({ pos, index: out.length + 1, text: String(node.attrs.text ?? '') })
+  })
+  return out
+})
+
+function addFootnote(): void {
+  const text = window.prompt('Footnote text')
+  if (text === null) return
+  editor.value?.chain().focus().insertFootnote(text.trim()).run()
+  showNotes.value = true
+}
+
+function editFootnote(note: NoteItem): void {
+  const text = window.prompt('Footnote text', note.text)
+  if (text === null) return
+  editor.value?.chain().focus().updateFootnote(note.pos, text.trim()).run()
+}
+
+function goToFootnote(note: NoteItem): void {
+  const ed = editor.value
+  if (!ed) return
+  ed.chain().focus().setTextSelection(note.pos).run()
+  const dom = ed.view.nodeDOM(note.pos)
+  const el = dom instanceof HTMLElement ? dom : (dom as any)?.parentElement
+  el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+}
+
+/** Fills {page}, {pages}, {title} and {date} for the on-screen sheets. */
+function runningText(template: string, page: number): string {
+  if (!template.trim()) return ''
+  return template
+    .replace(/\{page\}/g, String(page))
+    .replace(/\{pages\}/g, String(pageCount.value))
+    .replace(/\{title\}/g, title.value || 'Untitled document')
+    .replace(/\{date\}/g, new Date().toLocaleDateString())
+}
+
+function scheduleMetaSave(): void {
+  if (metaTimer) clearTimeout(metaTimer)
+  metaTimer = setTimeout(() => {
+    if (loadedId != null) {
+      void store.saveMeta(loadedId, { header: header.value, footer: footer.value })
+    }
+  }, 600)
+}
 
 interface Heading {
   offset: number
@@ -613,6 +682,7 @@ onMounted(async () => {
   }
 })
 onBeforeUnmount(() => {
+  if (metaTimer) clearTimeout(metaTimer)
   store.openId = null
   window.removeEventListener('keydown', onKeydown)
   if (saveTimer) clearTimeout(saveTimer)
@@ -864,6 +934,23 @@ onBeforeUnmount(() => {
         <Minus :size="15" /> <span class="ml-1 text-xs">Divider</span>
       </button>
       <span class="doc-sep" />
+      <span class="flex items-center gap-1 text-xs text-ink-dim"><Heading :size="13" /> Header:</span>
+      <input
+        v-model="header"
+        placeholder="e.g. {title}"
+        class="w-36 rounded-lg border border-border bg-surface px-2 py-1 text-xs outline-none focus:border-accent-line"
+        @input="scheduleMetaSave"
+      />
+      <span class="text-xs text-ink-dim">Footer:</span>
+      <input
+        v-model="footer"
+        placeholder="e.g. Page {page} of {pages}"
+        class="w-40 rounded-lg border border-border bg-surface px-2 py-1 text-xs outline-none focus:border-accent-line"
+        @input="scheduleMetaSave"
+      />
+      <span class="text-[10px] text-ink-dim">{page} {pages} {title} {date}</span>
+
+      <span class="doc-sep" />
       <span class="flex items-center gap-1 text-xs text-ink-dim"><BookOpen :size="13" /> Cover page:</span>
       <button
         v-for="c in COVERS"
@@ -886,6 +973,18 @@ onBeforeUnmount(() => {
       </button>
       <button class="doc-btn" title="Update the table of contents" @click="refreshToc">
         <RefreshCw :size="15" /> <span class="ml-1 text-xs">Update</span>
+      </button>
+      <span class="doc-sep" />
+      <button class="doc-btn" title="Insert a footnote here" @click="addFootnote">
+        <StickyNote :size="15" /> <span class="ml-1 text-xs">Footnote</span>
+      </button>
+      <button
+        class="doc-btn"
+        :class="showNotes ? 'doc-btn-on' : ''"
+        title="Show all footnotes"
+        @click="showNotes = !showNotes"
+      >
+        <ListTree :size="15" /> <span class="ml-1 text-xs">Notes ({{ footnotes.length }})</span>
       </button>
       <span class="doc-sep" />
       <button
@@ -1071,7 +1170,14 @@ onBeforeUnmount(() => {
               :key="n"
               class="doc-sheet"
               :style="{ top: (n - 1) * layout.cycle + 'px', height: layout.sheet + 'px' }"
-            />
+            >
+              <div v-if="header" class="sheet-running sheet-header" :style="{ height: marginIn + 'in' }">
+                {{ runningText(header, n) }}
+              </div>
+              <div v-if="footer" class="sheet-running sheet-footer" :style="{ height: marginIn + 'in' }">
+                {{ runningText(footer, n) }}
+              </div>
+            </div>
           </template>
           <div v-else class="doc-sheet doc-sheet-fill" />
         </div>
@@ -1079,6 +1185,37 @@ onBeforeUnmount(() => {
         <EditorContent :editor="editor" class="doc-layer" />
         </div>
       </div>
+
+      <aside
+        v-if="showNotes"
+        class="w-64 shrink-0 overflow-auto border-l border-border bg-surface py-2"
+      >
+        <div class="px-4 py-1 text-xs font-semibold uppercase tracking-wider text-ink-dim">
+          Footnotes
+        </div>
+        <p v-if="!footnotes.length" class="px-4 py-3 text-xs text-ink-dim">
+          No footnotes yet. Place the cursor and press Footnote.
+        </p>
+        <div
+          v-for="note in footnotes"
+          :key="note.pos"
+          class="group mx-2 mb-1 rounded-lg px-2 py-1.5 hover:bg-surface-2"
+        >
+          <div class="flex items-start gap-2">
+            <span class="mt-0.5 shrink-0 text-[10px] font-semibold text-accent">{{ note.index }}</span>
+            <button class="min-w-0 flex-1 text-left text-xs text-ink-dim" @click="goToFootnote(note)">
+              {{ note.text || '(empty note)' }}
+            </button>
+            <button
+              class="shrink-0 rounded p-0.5 text-ink-dim opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
+              title="Edit"
+              @click="editFootnote(note)"
+            >
+              <Replace :size="12" />
+            </button>
+          </div>
+        </div>
+      </aside>
     </div>
 
     <!-- find & replace -->

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Doc } from '@shared/types'
+import type { Doc, UpdateDocMetaInput } from '@shared/types'
 
 export const useDocumentsStore = defineStore('documents', () => {
   const docs = ref<Doc[]>([])
@@ -69,6 +69,11 @@ export const useDocumentsStore = defineStore('documents', () => {
     if (updated) replace(updated)
   }
 
+  async function saveMeta(id: number, patch: UpdateDocMetaInput): Promise<void> {
+    const updated = await guard('Save', () => window.cypher.docs.saveMeta(id, patch))
+    if (updated) replace(updated)
+  }
+
   async function duplicate(id: number): Promise<void> {
     const copy = await guard('Duplicate', () => window.cypher.docs.duplicate(id))
     if (copy) docs.value.unshift(copy)
@@ -105,6 +110,7 @@ export const useDocumentsStore = defineStore('documents', () => {
     create,
     rename,
     saveContent,
+    saveMeta,
     duplicate,
     remove,
     getById,

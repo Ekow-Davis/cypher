@@ -85,6 +85,9 @@ function renderNode(node: Node): string {
     case 'pageBreak':
       // print styles turn this into a real break-after: page
       return '<div data-page-break="true"></div>'
+    case 'footnote':
+      // numbering is filled in by collectFootnotes, which knows document order
+      return '<sup class="footnote-ref" data-footnote="1"></sup>'
     case 'toc': {
       const entries = (node.attrs?.entries ?? []) as {
         text: string
@@ -157,6 +160,11 @@ function runsOf(nodes: Node[] | undefined): Block['runs'] {
     }
     if (n.type === 'mention') {
       runs.push({ text: String(n.attrs?.label ?? '') })
+      return
+    }
+    if (n.type === 'footnote') {
+      // sentinel: the docx writer swaps this for a real footnote reference
+      runs.push({ text: '\u0000footnote' })
       return
     }
     n.content?.forEach(walk)
@@ -235,4 +243,36 @@ export function contentToBlocks(stored: string): Block[] {
   }
   ;(doc.content ?? []).forEach((n) => visit(n))
   return blocks
+}
+
+/** Footnote texts in document order — the number is the position in this list. */
+export function collectFootnotes(stored: string): string[] {
+  if (!stored) return []
+  let doc: Node
+  try {
+    doc = JSON.parse(stored) as Node
+  } catch {
+    return []
+  }
+  const notes: string[] = []
+  const walk = (n: Node): void => {
+    if (n.type === 'footnote') notes.push(String((n.attrs as any)?.text ?? ''))
+    n.content?.forEach(walk)
+  }
+  walk(doc)
+  return notes
+}
+
+/** Fills the empty markers with their numbers and appends the notes list. */
+export function withFootnotes(html: string, notes: string[]): string {
+  if (!notes.length) return html
+  let i = 0
+  const numbered = html.replace(
+    /<sup class="footnote-ref" data-footnote="1"><\/sup>/g,
+    () => `<sup class="footnote-ref">${++i}</sup>`
+  )
+  const list = notes
+    .map((t, idx) => `<div class="footnote-item"><sup>${idx + 1}</sup> ${escapeHtml(t)}</div>`)
+    .join('')
+  return `${numbered}<div class="footnotes"><div class="footnotes-title">Notes</div>${list}</div>`
 }

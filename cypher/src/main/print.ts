@@ -7,7 +7,16 @@ import { BrowserWindow } from 'electron'
  * export, so a printed page and an exported one come out identical rather than
  * diverging over two code paths.
  */
-export async function printHtml(html: string): Promise<{ ok: boolean; reason?: string }> {
+export interface RunningText {
+  display: boolean
+  header: string
+  footer: string
+}
+
+export async function printHtml(
+  html: string,
+  running?: RunningText
+): Promise<{ ok: boolean; reason?: string }> {
   const win = new BrowserWindow({
     show: false,
     webPreferences: { offscreen: false, javascript: false }
@@ -31,7 +40,10 @@ export async function printHtml(html: string): Promise<{ ok: boolean; reason?: s
 }
 
 /** Renders the same print HTML to a PDF buffer, for on-screen preview. */
-export async function previewHtml(html: string): Promise<ArrayBuffer | null> {
+export async function previewHtml(
+  html: string,
+  running?: RunningText
+): Promise<ArrayBuffer | null> {
   const win = new BrowserWindow({
     show: false,
     webPreferences: { offscreen: true, javascript: false }
@@ -41,7 +53,11 @@ export async function previewHtml(html: string): Promise<ArrayBuffer | null> {
     const pdf = await win.webContents.printToPDF({
       printBackground: true,
       pageSize: 'Letter',
-      margins: { top: 1, bottom: 1, left: 1, right: 1 }
+      margins: { top: 1, bottom: 1, left: 1, right: 1 },
+      // Chromium paginates and numbers these itself.
+      displayHeaderFooter: !!running?.display,
+      headerTemplate: running?.header ?? '<span></span>',
+      footerTemplate: running?.footer ?? '<span></span>'
     })
     return pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer
   } catch {

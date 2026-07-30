@@ -19,6 +19,7 @@ import type {
   Note,
   UpdateNoteInput,
   Doc,
+  UpdateDocMetaInput,
   ReaderMark,
   CreateMarkInput,
   UpdateMarkInput,
@@ -231,6 +232,8 @@ const cypher = {
       ipcRenderer.invoke('docs:rename', id, title),
     saveContent: (id: number, content: string): Promise<Doc | null> =>
       ipcRenderer.invoke('docs:saveContent', id, content),
+    saveMeta: (id: number, patch: UpdateDocMetaInput): Promise<Doc | null> =>
+      ipcRenderer.invoke('docs:saveMeta', id, patch),
     duplicate: (id: number): Promise<Doc | null> => ipcRenderer.invoke('docs:duplicate', id),
     remove: (id: number): Promise<void> => ipcRenderer.invoke('docs:delete', id),
     importImage: (): Promise<string | null> => ipcRenderer.invoke('docs:importImage'),

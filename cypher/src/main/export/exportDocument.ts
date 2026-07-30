@@ -6,10 +6,20 @@ import {
   Paragraph,
   TextRun,
   PageBreak,
+  Header,
+  Footer,
+  PageNumber,
+  FootnoteReferenceRun,
   HeadingLevel,
   AlignmentType
 } from 'docx'
-import { contentToBlocks, contentToHtml, type Block } from './tiptapToHtml'
+import {
+  contentToBlocks,
+  contentToHtml,
+  collectFootnotes,
+  withFootnotes,
+  type Block
+} from './tiptapToHtml'
 import { documentToHtml } from './bookHtml'
 import { getDocument } from '../db/repositories/documents'
 
@@ -22,13 +32,29 @@ const HEADINGS = [
   HeadingLevel.HEADING_6
 ]
 
+/**
+ * Blocks carry footnote markers as a sentinel run; swap them for real Word
+ * footnote references, numbered in document order.
+ */
+function withFootnoteRefs(blocks: Block[], total: number): Block[] {
+  if (!total) return blocks
+  let n = 0
+  for (const block of blocks) {
+    block.runs = block.runs.map((r) =>
+      r.text === '\u0000footnote' ? { text: '', footnote: ++n } : r
+    ) as never
+  }
+  return blocks
+}
+
 function toParagraph(block: Block): Paragraph {
   if (block.kind === 'pagebreak') return new Paragraph({ children: [new PageBreak()] })
   const children = block.runs.length
-    ? block.runs.map(
-        (r) =>
-          new TextRun({ text: r.text, bold: r.bold, italics: r.italic, strike: r.strike })
-      )
+    ? block.runs.map((r) => {
+        const note = (r as { footnote?: number }).footnote
+        if (note) return new FootnoteReferenceRun(note)
+        return new TextRun({ text: r.text, bold: r.bold, italics: r.italic, strike: r.strike })
+      })
     : [new TextRun('')]
 
   switch (block.kind) {
@@ -43,6 +69,26 @@ function toParagraph(block: Block): Paragraph {
     default:
       return new Paragraph({ children, spacing: { after: 120 } })
   }
+}
+
+/**
+ * Turns our header/footer template into docx runs. {page} and {pages} become
+ * genuine Word fields, so an exported document renumbers itself if it reflows —
+ * which static text could never do.
+ */
+function runningRuns(template: string, title: string): TextRun[] {
+  if (!template.trim()) return []
+  const parts = template.split(/(\{page\}|\{pages\}|\{title\}|\{date\})/g)
+  const children: (string | typeof PageNumber.CURRENT)[] = []
+  for (const part of parts) {
+    if (!part) continue
+    if (part === '{page}') children.push(PageNumber.CURRENT)
+    else if (part === '{pages}') children.push(PageNumber.TOTAL_PAGES)
+    else if (part === '{title}') children.push(title)
+    else if (part === '{date}') children.push(new Date().toLocaleDateString())
+    else children.push(part)
+  }
+  return [new TextRun({ children: children as never })]
 }
 
 function safeName(title: string): string {
@@ -75,7 +121,16 @@ export async function exportDocumentAs(
 
   try {
     if (format === 'docx') {
+      const notes = collectFootnotes(doc.content)
+      // Word footnotes are real page-bottom notes, numbered by Word itself.
+      const footnotes = Object.fromEntries(
+        notes.map((text, i) => [i + 1, { children: [new Paragraph(text)] }])
+      )
+      const headerRuns = runningRuns(doc.header ?? '', doc.title)
+      const footerRuns = runningRuns(doc.footer ?? '', doc.title)
+
       const document = new Document({
+        ...(notes.length ? { footnotes } : {}),
         numbering: {
           config: [
             {
@@ -86,12 +141,25 @@ export async function exportDocumentAs(
             }
           ]
         },
-        sections: [{ children: contentToBlocks(doc.content).map(toParagraph) }]
+        sections: [
+          {
+            ...(headerRuns.length
+              ? { headers: { default: new Header({ children: [new Paragraph({ children: headerRuns })] }) } }
+              : {}),
+            ...(footerRuns.length
+              ? { footers: { default: new Footer({ children: [new Paragraph({ children: footerRuns })] }) } }
+              : {}),
+            children: withFootnoteRefs(contentToBlocks(doc.content), notes.length).map(toParagraph)
+          }
+        ]
       })
       writeFileSync(picked.filePath, await Packer.toBuffer(document))
     } else {
       // Same HTML the printer and preview use, so all three agree.
-      const html = documentToHtml(doc.title, contentToHtml(doc.content))
+      const html = documentToHtml(
+        doc.title,
+        withFootnotes(contentToHtml(doc.content), collectFootnotes(doc.content))
+      )
       const win = new BrowserWindow({
         show: false,
         webPreferences: { offscreen: true, javascript: false }

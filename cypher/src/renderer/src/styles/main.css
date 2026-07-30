@@ -442,3 +442,63 @@ body {
   outline: 2px solid #2563eb;
   border-radius: 3px;
 }
+
+/* ---------- Running headers & footers ----------
+   Drawn inside the sheet's own margin band, so they occupy the same space the
+   print engine reserves for them rather than overlapping the text. */
+.doc-sheet {
+  overflow: hidden;
+}
+.sheet-running {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.7in;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 9pt;
+  color: #555;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sheet-header {
+  top: 0;
+  align-items: flex-end;
+  padding-bottom: 0.22in;
+}
+.sheet-footer {
+  bottom: 0;
+  align-items: flex-start;
+  padding-top: 0.22in;
+}
+
+/* ---------- Footnotes ---------- */
+.footnote-ref {
+  color: #2563eb;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 0.1em;
+  font-size: 0.72em;
+  vertical-align: super;
+  line-height: 0;
+}
+.footnote-ref:hover {
+  text-decoration: underline;
+}
+.footnotes {
+  margin-top: 2em;
+  padding-top: 0.8em;
+  border-top: 1px solid #c9c9cf;
+  font-size: 0.85em;
+  color: #444;
+}
+.footnotes-title {
+  font-weight: 700;
+  margin-bottom: 0.4em;
+}
+.footnote-item {
+  margin: 0.2em 0;
+}

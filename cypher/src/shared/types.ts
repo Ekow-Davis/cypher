@@ -265,6 +265,13 @@ export interface Doc {
   id: number
   title: string
   content: string // Tiptap document JSON (stringified)
+  header: string
+  footer: string
   created_at: string
   updated_at: string
+}
+
+export interface UpdateDocMetaInput {
+  header?: string
+  footer?: string
 }

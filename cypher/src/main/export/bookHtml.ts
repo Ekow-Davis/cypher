@@ -130,6 +130,10 @@ export const DOC_PRINT_CSS = `
   .toc-page { font-variant-numeric: tabular-nums; }
   .toc-level-2 { padding-left: 1.2em; }
   .toc-level-3 { padding-left: 2.4em; }
+  .footnote-ref { font-size: 0.72em; vertical-align: super; line-height: 0; font-weight: 700; }
+  .footnotes { margin-top: 2em; padding-top: 0.8em; border-top: 1px solid #c9c9cf; font-size: 0.85em; color: #444; }
+  .footnotes-title { font-weight: 700; margin-bottom: 0.4em; }
+  .footnote-item { margin: 0.2em 0; }
 `
 
 /** Wraps a document's rendered body in a printable page. */

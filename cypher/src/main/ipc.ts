@@ -36,9 +36,11 @@ import {
   createDocument,
   renameDocument,
   saveDocumentContent,
+  updateDocumentMeta,
   duplicateDocument,
   deleteDocument
 } from './db/repositories/documents'
+import { toPrintTemplate, hasRunningText } from './runningText'
 import {
   listTrash,
   restoreTrashItem,
@@ -100,7 +102,7 @@ import { importDocx } from './docx'
 import { exportDocumentAs } from './export/exportDocument'
 import { gatherBook } from './export/gather'
 import { bookToHtml, documentToHtml } from './export/bookHtml'
-import { contentToHtml } from './export/tiptapToHtml'
+import { contentToHtml, collectFootnotes, withFootnotes } from './export/tiptapToHtml'
 import {
   openWindow,
   windowCount,
@@ -129,6 +131,7 @@ import type {
   CreateMarkInput,
   UpdateMarkInput,
   UpdateNoteInput,
+  UpdateDocMetaInput,
   TrashKind,
   UpdateChapterMetaInput,
   ExportFormat,
@@ -388,12 +391,22 @@ export function registerIpcHandlers(): void {
   handle('print:document', (_e, id: number) => {
     const doc = getDocument(id)
     if (!doc) return { ok: false, reason: 'Document not found.' }
-    return printHtml(documentToHtml(doc.title, contentToHtml(doc.content)))
+    const body = withFootnotes(contentToHtml(doc.content), collectFootnotes(doc.content))
+    return printHtml(documentToHtml(doc.title, body), {
+      display: hasRunningText(doc.header, doc.footer),
+      header: toPrintTemplate(doc.header, doc.title),
+      footer: toPrintTemplate(doc.footer, doc.title)
+    })
   })
   handle('print:previewDocument', (_e, id: number) => {
     const doc = getDocument(id)
     if (!doc) return null
-    return previewHtml(documentToHtml(doc.title, contentToHtml(doc.content)))
+    const body = withFootnotes(contentToHtml(doc.content), collectFootnotes(doc.content))
+    return previewHtml(documentToHtml(doc.title, body), {
+      display: hasRunningText(doc.header, doc.footer),
+      header: toPrintTemplate(doc.header, doc.title),
+      footer: toPrintTemplate(doc.footer, doc.title)
+    })
   })
   handle('print:book', (_e, bookId: number, options: ExportOptions) => {
     const data = gatherBook(bookId, options.chapterIds)
@@ -430,6 +443,9 @@ export function registerIpcHandlers(): void {
   handle('docs:create', (_e, title?: string) => createDocument(title))
   handle('docs:rename', (_e, id: number, title: string) => renameDocument(id, title))
   handle('docs:saveContent', (_e, id: number, content: string) => saveDocumentContent(id, content))
+  handle('docs:saveMeta', (_e, id: number, patch: UpdateDocMetaInput) =>
+    updateDocumentMeta(id, patch)
+  )
   handle('docs:duplicate', (_e, id: number) => duplicateDocument(id))
   handle('docs:delete', (_e, id: number) => deleteDocument(id))
   handle('docs:importImage', () => importDocImage())

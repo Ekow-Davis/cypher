@@ -1,5 +1,5 @@
 import { getDb } from '../index'
-import type { Doc } from '@shared/types'
+import type { Doc, UpdateDocMetaInput } from '@shared/types'
 
 /** Standalone documents — the word-processor side, unrelated to books. */
 
@@ -32,12 +32,26 @@ export function saveDocumentContent(id: number, content: string): Doc | null {
   return getDocument(id)
 }
 
+const META_FIELDS = ['header', 'footer'] as const
+
+export function updateDocumentMeta(id: number, patch: UpdateDocMetaInput): Doc | null {
+  const entries = Object.entries(patch).filter(([k]) =>
+    (META_FIELDS as readonly string[]).includes(k)
+  )
+  if (!entries.length) return getDocument(id)
+  const sets = entries.map(([k]) => `${k} = ?`).join(', ')
+  getDb()
+    .prepare(`UPDATE documents SET ${sets} WHERE id = ?`)
+    .run(...entries.map(([, v]) => v as string), id)
+  return getDocument(id)
+}
+
 export function duplicateDocument(id: number): Doc | null {
   const source = getDocument(id)
   if (!source) return null
   const info = getDb()
-    .prepare('INSERT INTO documents (title, content) VALUES (?, ?)')
-    .run(`${source.title} (copy)`, source.content)
+    .prepare('INSERT INTO documents (title, content, header, footer) VALUES (?, ?, ?, ?)')
+    .run(`${source.title} (copy)`, source.content, source.header, source.footer)
   return getDocument(Number(info.lastInsertRowid))
 }
 

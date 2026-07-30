@@ -298,3 +298,15 @@ export function migration012(db: Database): void {
     ALTER TABLE reader_items ADD COLUMN last_read_at TEXT;
   `)
 }
+
+/**
+ * Migration 013 — running headers and footers on documents.
+ * Stored as templates with {page}, {pages}, {title} and {date} placeholders so
+ * one definition serves both the editor's sheets and the print engine.
+ */
+export function migration013(db: Database): void {
+  db.exec(`
+    ALTER TABLE documents ADD COLUMN header TEXT NOT NULL DEFAULT '';
+    ALTER TABLE documents ADD COLUMN footer TEXT NOT NULL DEFAULT '';
+  `)
+}
