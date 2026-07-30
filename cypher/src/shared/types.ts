@@ -260,3 +260,11 @@ export interface SectionExportOptions {
   includePortraits: boolean
   ids: number[]
 }
+
+export interface Doc {
+  id: number
+  title: string
+  content: string // Tiptap document JSON (stringified)
+  created_at: string
+  updated_at: string
+}

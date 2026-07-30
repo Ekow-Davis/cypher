@@ -162,3 +162,197 @@ body {
 .pdf-text-layer ::selection {
   background: color-mix(in oklab, var(--color-accent) 45%, transparent);
 }
+
+/* ---------- Document (word-processor) ---------- */
+.doc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  padding: 5px;
+  color: var(--color-ink-dim);
+  transition: background 0.12s, color 0.12s;
+}
+.doc-btn:hover {
+  background: var(--color-surface-2);
+  color: var(--color-ink);
+}
+.doc-btn-on {
+  background: var(--color-surface-2);
+  color: var(--color-accent);
+}
+.doc-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--color-border);
+}
+.doc-select {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-ink);
+  font-size: 12px;
+  padding: 3px 4px;
+  outline: none;
+}
+
+/* The page itself stays paper-white in either theme — it's what will be
+   printed or exported, so showing it any other way would mislead. */
+.cypher-page {
+  width: 8.5in;
+  min-height: 11in;
+  max-width: 100%;
+  padding: 1in;
+  background: #ffffff;
+  color: #111111;
+  box-shadow: 0 6px 28px rgb(0 0 0 / 28%);
+  border-radius: 2px;
+}
+.cypher-doc {
+  min-height: 9in;
+  outline: none;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 12pt;
+  line-height: 1.5;
+}
+.cypher-doc p {
+  margin: 0 0 0.6em;
+}
+.cypher-doc h1 { font-size: 20pt; font-weight: 700; margin: 0.6em 0 0.4em; }
+.cypher-doc h2 { font-size: 16pt; font-weight: 700; margin: 0.6em 0 0.35em; }
+.cypher-doc h3 { font-size: 13pt; font-weight: 700; margin: 0.5em 0 0.3em; }
+.cypher-doc ul { list-style: disc; padding-left: 1.6em; margin: 0.4em 0; }
+.cypher-doc ol { list-style: decimal; padding-left: 1.6em; margin: 0.4em 0; }
+.cypher-doc blockquote {
+  border-left: 3px solid #ccc;
+  margin: 0.6em 0;
+  padding-left: 1em;
+  color: #444;
+}
+.cypher-doc pre {
+  background: #f4f4f5;
+  border-radius: 4px;
+  padding: 0.6em 0.8em;
+  font-family: Consolas, monospace;
+  font-size: 10.5pt;
+  overflow-x: auto;
+}
+.cypher-doc code { font-family: Consolas, monospace; font-size: 0.92em; }
+.cypher-doc a { color: #1d4ed8; text-decoration: underline; }
+.cypher-doc hr { border: none; border-top: 1px solid #ccc; margin: 1em 0; }
+.cypher-doc p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: #9ca3af;
+}
+
+/* ---------- Document tables & images ---------- */
+.cypher-doc table {
+  border-collapse: collapse;
+  margin: 0.8em 0;
+  width: 100%;
+  table-layout: fixed;
+  overflow: hidden;
+}
+.cypher-doc th,
+.cypher-doc td {
+  border: 1px solid #c9c9cf;
+  padding: 6px 8px;
+  vertical-align: top;
+  position: relative;
+  min-width: 2em;
+}
+.cypher-doc th {
+  background: #f1f1f4;
+  font-weight: 700;
+  text-align: left;
+}
+.cypher-doc .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(37 99 235 / 12%);
+  pointer-events: none;
+}
+/* drag handle for resizable columns */
+.cypher-doc .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background: #2563eb;
+  pointer-events: none;
+}
+.cypher-doc.resize-cursor {
+  cursor: col-resize;
+}
+.cypher-doc img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.6em 0;
+  border-radius: 2px;
+}
+.cypher-doc img.ProseMirror-selectednode {
+  outline: 2px solid #2563eb;
+}
+
+/* ---------- Paged view & page breaks ----------
+   Marks where each page ends rather than reflowing content into separate
+   sheets: true pagination means measuring and splitting the document, which a
+   contenteditable surface can't do for free. The line tells you where the page
+   boundary falls; a page break forces content past it. */
+.cypher-doc.paged {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(9in - 1px),
+    rgb(0 0 0 / 16%) calc(9in - 1px),
+    rgb(0 0 0 / 16%) 9in
+  );
+  background-repeat: repeat-y;
+}
+
+.cypher-page-break {
+  position: relative;
+  height: 0;
+  margin: 1.4em 0;
+  border-top: 2px dashed #b9b9c2;
+}
+.cypher-page-break::after {
+  content: 'Page break';
+  position: absolute;
+  top: -0.75em;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffffff;
+  padding: 0 0.6em;
+  font-family: system-ui, sans-serif;
+  font-size: 8pt;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a8a94;
+}
+.cypher-page-break.ProseMirror-selectednode {
+  border-top-color: #2563eb;
+}
+
+/* Printing and PDF export honour breaks for real. */
+@media print {
+  .cypher-doc.paged {
+    background-image: none;
+  }
+  .cypher-page-break {
+    break-after: page;
+    page-break-after: always;
+    border: none;
+    margin: 0;
+  }
+  .cypher-page-break::after {
+    content: none;
+  }
+}

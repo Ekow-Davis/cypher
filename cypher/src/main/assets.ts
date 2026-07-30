@@ -97,3 +97,25 @@ export async function importCharacterImage(): Promise<string | null> {
   copyFileSync(src, join(dir, name))
   return `characters/${name}`
 }
+
+/**
+ * Copies a picked image into app storage for use inside a document.
+ * Images live as files rather than base64 in the row: the database stays small,
+ * backups stay quick, and the same asset protocol serves them as covers.
+ */
+export async function importDocImage(): Promise<string | null> {
+  const result = await dialog.showOpenDialog({
+    title: 'Insert an image',
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+
+  const src = result.filePaths[0]
+  const dir = join(assetsRoot(), 'doc-images')
+  mkdirSync(dir, { recursive: true })
+  const ext = extname(src).toLowerCase() || '.png'
+  const name = `${randomUUID()}${ext}`
+  copyFileSync(src, join(dir, name))
+  return `doc-images/${name}`
+}

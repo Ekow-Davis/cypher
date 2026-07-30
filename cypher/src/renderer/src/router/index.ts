@@ -26,6 +26,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Document', privacy: 'public', themeDomain: 'document' }
   },
   {
+    path: '/document/:id',
+    name: 'document-editor',
+    component: () => import('@/domains/document/DocumentEditor.vue'),
+    meta: { themeDomain: 'document' }
+  },
+  {
     path: '/book',
     name: 'book',
     component: () => import('@/domains/book/BookHome.vue'),

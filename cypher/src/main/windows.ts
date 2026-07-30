@@ -12,6 +12,24 @@ export interface OpenResult {
   count: number
 }
 
+/**
+ * webContents ids of windows opened as secondary views. A secondary window's
+ * "back" affordance should close it rather than navigate, since the thing that
+ * spawned it is still open in the window behind.
+ */
+const secondaryWindows = new Set<number>()
+
+export function isSecondaryWindow(webContentsId: number): boolean {
+  return secondaryWindows.has(webContentsId)
+}
+
+export function closeWindowFor(webContentsId: number): boolean {
+  const win = liveWindows().find((w) => w.webContents.id === webContentsId)
+  if (!win) return false
+  win.close()
+  return true
+}
+
 function liveWindows(): BrowserWindow[] {
   return BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed())
 }
@@ -65,6 +83,11 @@ export function createWindow(route = '/'): BrowserWindow | null {
 
 export function openWindow(route: string): OpenResult {
   const win = createWindow(route)
+  if (win) {
+    const id = win.webContents.id
+    secondaryWindows.add(id)
+    win.on('closed', () => secondaryWindows.delete(id))
+  }
   if (!win) {
     return {
       ok: false,

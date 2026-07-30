@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export type FocusWidth = 'narrow' | 'medium' | 'wide'
+export type DocsView = 'list' | 'grid'
+export type PageView = 'paged' | 'continuous'
 
 const KEY = 'editorPrefs'
 
@@ -11,6 +13,8 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const spellcheck = ref(true)
   const focusWidth = ref<FocusWidth>('medium')
   const defaultAuthor = ref('')
+  const docsView = ref<DocsView>('list')
+  const pageView = ref<PageView>('paged')
   const loaded = ref(false)
 
   async function load(): Promise<void> {
@@ -21,6 +25,8 @@ export const usePreferencesStore = defineStore('preferences', () => {
         if (typeof raw.spellcheck === 'boolean') spellcheck.value = raw.spellcheck
         if (raw.focusWidth) focusWidth.value = raw.focusWidth as FocusWidth
         if (typeof raw.defaultAuthor === 'string') defaultAuthor.value = raw.defaultAuthor
+        if (raw.docsView === 'grid' || raw.docsView === 'list') docsView.value = raw.docsView
+        if (raw.pageView === 'paged' || raw.pageView === 'continuous') pageView.value = raw.pageView
       }
     } catch {
       /* first run */
@@ -34,7 +40,9 @@ export const usePreferencesStore = defineStore('preferences', () => {
         autosaveMs: autosaveMs.value,
         spellcheck: spellcheck.value,
         focusWidth: focusWidth.value,
-        defaultAuthor: defaultAuthor.value
+        defaultAuthor: defaultAuthor.value,
+        docsView: docsView.value,
+        pageView: pageView.value
       })
     } catch {
       /* non-fatal */
@@ -47,6 +55,14 @@ export const usePreferencesStore = defineStore('preferences', () => {
   }
   function setSpellcheck(on: boolean): void {
     spellcheck.value = on
+    void persist()
+  }
+  function setPageView(v: PageView): void {
+    pageView.value = v
+    void persist()
+  }
+  function setDocsView(v: DocsView): void {
+    docsView.value = v
     void persist()
   }
   function setDefaultAuthor(name: string): void {
@@ -63,11 +79,15 @@ export const usePreferencesStore = defineStore('preferences', () => {
     spellcheck,
     focusWidth,
     defaultAuthor,
+    docsView,
+    pageView,
     loaded,
     load,
     setAutosave,
     setSpellcheck,
     setFocusWidth,
-    setDefaultAuthor
+    setDefaultAuthor,
+    setDocsView,
+    setPageView
   }
 })

@@ -31,6 +31,15 @@ import {
 import { getGoal, upsertGoal, deleteGoal } from './db/repositories/goals'
 import { listNotes, createNote, updateNote, deleteNote } from './db/repositories/notes'
 import {
+  listDocuments,
+  getDocument,
+  createDocument,
+  renameDocument,
+  saveDocumentContent,
+  duplicateDocument,
+  deleteDocument
+} from './db/repositories/documents'
+import {
   listTrash,
   restoreTrashItem,
   purgeTrashItem,
@@ -79,9 +88,20 @@ import {
   snapshotProgress,
   setMood
 } from './db/repositories/checkins'
-import { importCover, importCharacterImage, absoluteAssetPath } from './assets'
+import {
+  importCover,
+  importCharacterImage,
+  importDocImage,
+  absoluteAssetPath
+} from './assets'
 import { exportBook, exportSection } from './export'
-import { openWindow, windowCount, broadcastDataChanged } from './windows'
+import {
+  openWindow,
+  windowCount,
+  broadcastDataChanged,
+  isSecondaryWindow,
+  closeWindowFor
+} from './windows'
 import {
   listBackups,
   createBackup,
@@ -116,7 +136,8 @@ import type {
  * These never trigger a cross-window refresh.
  */
 const NO_BROADCAST = /^(app|db|settings|window|export):/
-const MUTATION = /:(create|update|delete|rename|save[A-Za-z]*|set[A-Za-z]*|apply[A-Za-z]*|reorder|archive|import[A-Za-z]*|remove|snapshot|upsert|empty|purge|restore|ensure[A-Za-z]*)$/
+const MUTATION =
+  /:(create|update|delete|rename|duplicate|save[A-Za-z]*|set[A-Za-z]*|apply[A-Za-z]*|reorder|archive|import[A-Za-z]*|remove|snapshot|upsert|empty|purge|restore|ensure[A-Za-z]*)$/
 
 function shouldBroadcast(channel: string): boolean {
   return !NO_BROADCAST.test(channel) && MUTATION.test(channel)
@@ -144,6 +165,8 @@ export function registerIpcHandlers(): void {
   // Windows
   handle('window:open', (_e, route: string) => openWindow(route))
   handle('window:count', () => windowCount())
+  handle('window:isSecondary', (e) => isSecondaryWindow(e.sender.id))
+  handle('window:close', (e) => closeWindowFor(e.sender.id))
 
   // App / diagnostics
   handle('app:ping', () => 'pong')
@@ -376,6 +399,16 @@ export function registerIpcHandlers(): void {
   handle('marks:create', (_e, input: CreateMarkInput) => createMark(input))
   handle('marks:update', (_e, id: number, patch: UpdateMarkInput) => updateMark(id, patch))
   handle('marks:delete', (_e, id: number) => deleteMark(id))
+
+  // Documents
+  handle('docs:list', () => listDocuments())
+  handle('docs:get', (_e, id: number) => getDocument(id))
+  handle('docs:create', (_e, title?: string) => createDocument(title))
+  handle('docs:rename', (_e, id: number, title: string) => renameDocument(id, title))
+  handle('docs:saveContent', (_e, id: number, content: string) => saveDocumentContent(id, content))
+  handle('docs:duplicate', (_e, id: number) => duplicateDocument(id))
+  handle('docs:delete', (_e, id: number) => deleteDocument(id))
+  handle('docs:importImage', () => importDocImage())
 
   // Notes
   handle('notes:list', (_e, ownerType: string, ownerId: number) =>

@@ -5,6 +5,7 @@ import { useNotesStore } from '@/stores/notes'
 import { useInsightsStore } from '@/stores/insights'
 import { useBooksStore } from '@/stores/books'
 import { useReaderStore } from '@/stores/reader'
+import { useDocumentsStore } from '@/stores/documents'
 
 /**
  * Keeps windows in step. Main broadcasts which slice of data changed; this
@@ -22,6 +23,7 @@ export function installSync(): void {
     const insights = useInsightsStore()
     const books = useBooksStore()
     const reader = useReaderStore()
+    const documents = useDocumentsStore()
 
     try {
       switch (scope) {
@@ -48,6 +50,12 @@ export function installSync(): void {
           break
         case 'reader':
           await reader.load()
+          break
+        case 'docs':
+          // A rename in a document window must reach the list in the other one.
+          await documents.refresh(documents.openId)
+          break
+        case 'marks':
           break
         case 'trash':
           // A restore or purge can touch anything, so re-read what's loaded.

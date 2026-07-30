@@ -18,6 +18,7 @@ import type {
   ReaderImportResult,
   Note,
   UpdateNoteInput,
+  Doc,
   ReaderMark,
   CreateMarkInput,
   UpdateMarkInput,
@@ -35,7 +36,10 @@ const cypher = {
   windows: {
     open: (route: string): Promise<{ ok: boolean; reason?: string; count: number }> =>
       ipcRenderer.invoke('window:open', route),
-    count: (): Promise<number> => ipcRenderer.invoke('window:count')
+    count: (): Promise<number> => ipcRenderer.invoke('window:count'),
+    /** True when this window was opened as a secondary view. */
+    isSecondary: (): Promise<boolean> => ipcRenderer.invoke('window:isSecondary'),
+    close: (): Promise<boolean> => ipcRenderer.invoke('window:close')
   },
 
   /** Fires when another window changes a slice of data. */
@@ -208,6 +212,19 @@ const cypher = {
     update: (id: number, patch: UpdateMarkInput): Promise<ReaderMark | null> =>
       ipcRenderer.invoke('marks:update', id, patch),
     remove: (id: number): Promise<void> => ipcRenderer.invoke('marks:delete', id)
+  },
+
+  docs: {
+    list: (): Promise<Doc[]> => ipcRenderer.invoke('docs:list'),
+    get: (id: number): Promise<Doc | null> => ipcRenderer.invoke('docs:get', id),
+    create: (title?: string): Promise<Doc> => ipcRenderer.invoke('docs:create', title),
+    rename: (id: number, title: string): Promise<Doc | null> =>
+      ipcRenderer.invoke('docs:rename', id, title),
+    saveContent: (id: number, content: string): Promise<Doc | null> =>
+      ipcRenderer.invoke('docs:saveContent', id, content),
+    duplicate: (id: number): Promise<Doc | null> => ipcRenderer.invoke('docs:duplicate', id),
+    remove: (id: number): Promise<void> => ipcRenderer.invoke('docs:delete', id),
+    importImage: (): Promise<string | null> => ipcRenderer.invoke('docs:importImage')
   },
 
   notes: {
