@@ -63,7 +63,7 @@ export function createCharacterMention(): any {
             el.style.position = 'fixed'
             el.style.zIndex = '70'
             document.body.appendChild(el)
-            el.appendChild(component.element)
+            if (component.element) el.appendChild(component.element as globalThis.Node)
             place(props.clientRect)
           },
           onUpdate: (props: any) => {

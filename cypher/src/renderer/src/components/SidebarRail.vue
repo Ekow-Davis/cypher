@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { NotebookPen, FileText, BookOpen, BookMarked, Settings, Sun, Moon } from 'lucide-vue-next'
 import { useAppStore } from '@/stores/app'
 import { useBreakpoint } from '@/lib/useBreakpoint'
+import logo from '@/assets/logo.png'
 import { useThemeStore } from '@/stores/theme'
 
 const appStore = useAppStore()
@@ -26,7 +27,13 @@ const toggleLabel = computed(() => (isDark.value ? 'Light' : 'Dark'))
   <aside
     :class="['flex shrink-0 flex-col items-center gap-2 border-r border-border bg-surface py-4', isTight ? 'w-14' : 'w-20']"
   >
-    <div class="mb-4 select-none text-lg font-bold tracking-widest text-accent">CY</div>
+    <img
+      :src="logo"
+      alt="Cypher"
+      class="mb-4 select-none rounded-xl"
+      :class="isTight ? 'h-8 w-8' : 'h-10 w-10'"
+      draggable="false"
+    />
 
     <RouterLink
       v-for="item in items"

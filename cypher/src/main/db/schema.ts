@@ -353,3 +353,12 @@ export function migration015(db: Database): void {
     );
   `)
 }
+
+/**
+ * Migration 016 — documents join the trash. They were the one content type
+ * that deleted permanently, which made the Documents list the only place a
+ * misclick was unrecoverable.
+ */
+export function migration016(db: Database): void {
+  db.exec(`ALTER TABLE documents ADD COLUMN deleted_at TEXT;`)
+}

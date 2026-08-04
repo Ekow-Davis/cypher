@@ -297,7 +297,15 @@ const cypher = {
       ipcRenderer.invoke('fonts:import'),
     get: (): Promise<{ fileName: string; path: string; format: string } | null> =>
       ipcRenderer.invoke('fonts:get'),
-    clear: (): Promise<void> => ipcRenderer.invoke('fonts:clear')
+    clear: (): Promise<void> => ipcRenderer.invoke('fonts:clear'),
+
+    list: (): Promise<
+      { id: string; family: string; fileName: string; path: string; format: string }[]
+    > => ipcRenderer.invoke('fonts:list'),
+    add: (): Promise<{ id: string; family: string } | null> => ipcRenderer.invoke('fonts:add'),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke('fonts:remove', id),
+    rename: (id: string, family: string): Promise<{ id: string; family: string } | null> =>
+      ipcRenderer.invoke('fonts:rename', id, family)
   },
 
   comments: {

@@ -6,6 +6,7 @@ import { assetsRoot, absoluteAssetPath } from './assets'
 
 const VALID_EXT = new Set(['.ttf', '.otf', '.woff', '.woff2'])
 const KEY = 'scriptFont'
+const LIBRARY_KEY = 'fontLibrary'
 
 export interface ScriptFont {
   fileName: string
@@ -41,7 +42,8 @@ export async function importScriptFont(): Promise<ScriptFont | null> {
   const dir = join(assetsRoot(), 'fonts')
   mkdirSync(dir, { recursive: true })
   const dest = join(dir, `script${ext}`)
-  // Overwrite any previous font of a different extension so only one is ever active.
+  // Overwrite any previous script font of a different extension so only one is
+  // ever active. Library fonts use uuid-style names, so they can't collide.
   for (const e of VALID_EXT) {
     const stale = join(dir, `script${e}`)
     if (existsSync(stale)) unlinkSync(stale)
@@ -73,4 +75,102 @@ export function clearScriptFont(): void {
     }
   }
   setSetting(KEY, null)
+}
+
+
+export interface LibraryFont {
+  id: string
+  /** CSS family name, derived from the file name and made unique. */
+  family: string
+  fileName: string
+  path: string
+  format: string
+}
+
+/**
+ * A library of user-supplied fonts usable anywhere in the app.
+ *
+ * Separate from the diary's script font: that one is a single swappable slot
+ * tied to the "translation" concept, whereas these are ordinary typefaces the
+ * user adds because the app ships with very few. Both live under assets/ and
+ * are served by the same protocol.
+ */
+export function listLibraryFonts(): LibraryFont[] {
+  const stored = (getSetting(LIBRARY_KEY) as LibraryFont[] | null | undefined) ?? []
+  // Drop entries whose file has gone missing rather than emitting broken @font-face rules.
+  return stored.filter((f) => existsSync(absoluteAssetPath(f.path)))
+}
+
+function uniqueFamily(base: string, taken: Set<string>): string {
+  const clean = base.replace(/[^A-Za-z0-9 _-]/g, '').trim() || 'Custom Font'
+  if (!taken.has(clean)) return clean
+  let n = 2
+  while (taken.has(`${clean} ${n}`)) n++
+  return `${clean} ${n}`
+}
+
+export async function importLibraryFont(): Promise<LibraryFont | null> {
+  const result = await dialog.showOpenDialog({
+    title: 'Add a font',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'woff', 'woff2'] }]
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+
+  const dir = join(assetsRoot(), 'fonts')
+  mkdirSync(dir, { recursive: true })
+
+  const library = listLibraryFonts()
+  const taken = new Set(library.map((f) => f.family))
+  let last: LibraryFont | null = null
+
+  for (const src of result.filePaths) {
+    const ext = extname(src).toLowerCase()
+    if (!VALID_EXT.has(ext)) continue
+    const id = `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+    const dest = join(dir, `${id}${ext}`)
+    copyFileSync(src, dest)
+
+    const baseName = (src.split(/[\\/]/).pop() ?? 'font').replace(/\.[^.]+$/, '')
+    const family = uniqueFamily(baseName.replace(/[-_]+/g, ' '), taken)
+    taken.add(family)
+
+    last = {
+      id,
+      family,
+      fileName: src.split(/[\\/]/).pop() ?? 'font',
+      path: `fonts/${id}${ext}`,
+      format: FORMAT_BY_EXT[ext]
+    }
+    library.push(last)
+  }
+
+  setSetting(LIBRARY_KEY, library)
+  return last
+}
+
+export function removeLibraryFont(id: string): void {
+  const library = listLibraryFonts()
+  const target = library.find((f) => f.id === id)
+  if (target) {
+    try {
+      unlinkSync(absoluteAssetPath(target.path))
+    } catch {
+      /* best effort */
+    }
+  }
+  setSetting(
+    LIBRARY_KEY,
+    library.filter((f) => f.id !== id)
+  )
+}
+
+export function renameLibraryFont(id: string, family: string): LibraryFont | null {
+  const library = listLibraryFonts()
+  const taken = new Set(library.filter((f) => f.id !== id).map((f) => f.family))
+  const target = library.find((f) => f.id === id)
+  if (!target) return null
+  target.family = uniqueFamily(family, taken)
+  setSetting(LIBRARY_KEY, library)
+  return target
 }

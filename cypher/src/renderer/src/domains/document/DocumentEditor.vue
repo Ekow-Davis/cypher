@@ -86,6 +86,8 @@ import {
 } from 'lucide-vue-next'
 import { useDocumentsStore } from '@/stores/documents'
 import { usePreferencesStore } from '@/stores/preferences'
+import { useFontsStore } from '@/stores/fonts'
+import type { DocComment, RunningAlign } from '@shared/types'
 import { assetUrl } from '@/lib/assets'
 import { Pagination, remeasureHook, type PageLayout } from '@/lib/pagination'
 import { FindReplace, findKey, findMatches, type Match } from '@/lib/findReplace'
@@ -95,7 +97,7 @@ import { CommentMark, findCommentPos } from '@/lib/comment'
 import {
   CrossReference,
   Caption,
-  IdentifiedHeading,
+  HeadingRefId,
   collectReferenceables,
   displayFor,
   newId,
@@ -108,6 +110,7 @@ const route = useRoute()
 const router = useRouter()
 const store = useDocumentsStore()
 const prefs = usePreferencesStore()
+const fontsStore = useFontsStore()
 
 const id = Number(route.params.id)
 type SaveStatus = 'saved' | 'saving' | 'unsaved'
@@ -174,7 +177,7 @@ let loadedId: number | null = null
 let loadingContent = false
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
-const FONTS = [
+const BUILTIN_FONTS = [
   { label: 'Default', value: '' },
   { label: 'Georgia', value: 'Georgia, serif' },
   { label: 'Times', value: '"Times New Roman", Times, serif' },
@@ -182,6 +185,12 @@ const FONTS = [
   { label: 'Calibri', value: 'Calibri, Candara, sans-serif' },
   { label: 'Courier', value: '"Courier New", Courier, monospace' }
 ]
+
+/** Built-ins plus whatever the user has added in Settings. */
+const FONTS = computed(() => [
+  ...BUILTIN_FONTS,
+  ...fontsStore.library.map((f) => ({ label: f.family, value: `'${f.family}'` }))
+])
 const SIZES = ['10pt', '11pt', '12pt', '14pt', '16pt', '18pt', '24pt', '32pt']
 const LINE_HEIGHTS = [
   { label: 'Single', value: '1.15' },
@@ -237,8 +246,8 @@ const SizedImage = TiptapImage.extend({
 
 const editor = useEditor({
   extensions: [
-    StarterKit.configure({ heading: false }),
-    IdentifiedHeading,
+    StarterKit,
+    HeadingRefId,
     Underline,
     TextStyle,
     Color,

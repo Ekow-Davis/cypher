@@ -41,7 +41,15 @@ import {
   deleteDocument
 } from './db/repositories/documents'
 import { toPrintTemplate, hasRunningText } from './runningText'
-import { importScriptFont, getScriptFont, clearScriptFont } from './fonts'
+import {
+  importScriptFont,
+  getScriptFont,
+  clearScriptFont,
+  listLibraryFonts,
+  importLibraryFont,
+  removeLibraryFont,
+  renameLibraryFont
+} from './fonts'
 import {
   securityStatus,
   setupDiary,
@@ -528,6 +536,13 @@ export function registerIpcHandlers(): void {
   // Script font (diary "translation")
   handle('fonts:import', () => importScriptFont())
   handle('fonts:get', () => getScriptFont())
+  handle('fonts:list', () => listLibraryFonts())
+  handle('fonts:add', () => importLibraryFont())
+  handle('fonts:remove', (_e, id: string) => {
+    removeLibraryFont(id)
+    broadcastDataChanged('fonts')
+  })
+  handle('fonts:rename', (_e, id: string, family: string) => renameLibraryFont(id, family))
   handle('fonts:clear', async () => {
     clearScriptFont()
     broadcastDataChanged('fonts')

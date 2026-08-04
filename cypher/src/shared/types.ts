@@ -188,7 +188,7 @@ export interface BackupInfo {
 
 export type ArchiveCadence = 'off' | 'weekly' | 'monthly'
 
-export type TrashKind = 'book' | 'chapter' | 'lore' | 'character'
+export type TrashKind = 'book' | 'chapter' | 'lore' | 'character' | 'document'
 
 export interface TrashItem {
   kind: TrashKind
@@ -267,11 +267,68 @@ export interface Doc {
   content: string // Tiptap document JSON (stringified)
   header: string
   footer: string
+  header_align: RunningAlign
+  footer_align: RunningAlign
   created_at: string
   updated_at: string
 }
 
+export type RunningAlign = 'left' | 'center' | 'right'
+
 export interface UpdateDocMetaInput {
   header?: string
   footer?: string
+  header_align?: RunningAlign
+  footer_align?: RunningAlign
+}
+
+export interface DocComment {
+  id: number
+  document_id: number
+  anchor: string
+  author: string
+  body: string
+  quote: string | null
+  resolved: number
+  created_at: string
+}
+
+export interface CreateCommentInput {
+  documentId: number
+  anchor: string
+  author: string
+  body: string
+  quote?: string | null
+}
+
+export interface DiarySecurityStatus {
+  configured: boolean
+  locked: boolean
+  lockedUntil: string | null
+  failCount: number
+}
+
+export interface Diary {
+  id: number
+  name: string
+  created_at: string
+  sort_order: number
+}
+
+export interface DiaryEntry {
+  id: number
+  diary_id: number | null // null = standalone "vent" entry
+  entry_number: number | null
+  title: string // plaintext once unlocked; the DB row holds ciphertext
+  content: string
+  created_at: string
+  updated_at: string
+  month_group: string | null
+  sort_order: number
+}
+
+export interface CreateEntryInput {
+  diaryId: number | null
+  title: string
+  content: string
 }

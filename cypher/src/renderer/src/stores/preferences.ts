@@ -14,6 +14,8 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const spellcheck = ref(true)
   const focusWidth = ref<FocusWidth>('medium')
   const defaultAuthor = ref('')
+  /** CSS family used by the manuscript and lore editors. */
+  const editorFont = ref('')
   const docsView = ref<DocsView>('list')
   const pageView = ref<PageView>('paged')
   const pageMargin = ref<PageMargin>('normal')
@@ -27,6 +29,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
         if (typeof raw.spellcheck === 'boolean') spellcheck.value = raw.spellcheck
         if (raw.focusWidth) focusWidth.value = raw.focusWidth as FocusWidth
         if (typeof raw.defaultAuthor === 'string') defaultAuthor.value = raw.defaultAuthor
+        if (typeof raw.editorFont === 'string') editorFont.value = raw.editorFont
         if (raw.docsView === 'grid' || raw.docsView === 'list') docsView.value = raw.docsView
         if (raw.pageView === 'paged' || raw.pageView === 'continuous') pageView.value = raw.pageView
         if (raw.pageMargin === 'narrow' || raw.pageMargin === 'normal' || raw.pageMargin === 'wide')
@@ -45,6 +48,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
         spellcheck: spellcheck.value,
         focusWidth: focusWidth.value,
         defaultAuthor: defaultAuthor.value,
+        editorFont: editorFont.value,
         docsView: docsView.value,
         pageView: pageView.value,
         pageMargin: pageMargin.value
@@ -74,6 +78,10 @@ export const usePreferencesStore = defineStore('preferences', () => {
     docsView.value = v
     void persist()
   }
+  function setEditorFont(family: string): void {
+    editorFont.value = family
+    void persist()
+  }
   function setDefaultAuthor(name: string): void {
     defaultAuthor.value = name
     void persist()
@@ -88,6 +96,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     spellcheck,
     focusWidth,
     defaultAuthor,
+    editorFont,
     docsView,
     pageView,
     pageMargin,
@@ -97,6 +106,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     setSpellcheck,
     setFocusWidth,
     setDefaultAuthor,
+    setEditorFont,
     setDocsView,
     setPageView,
     setPageMargin

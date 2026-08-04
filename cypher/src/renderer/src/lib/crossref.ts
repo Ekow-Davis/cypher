@@ -1,5 +1,4 @@
-import { Node, mergeAttributes } from '@tiptap/core'
-import Heading from '@tiptap/extension-heading'
+import { Node, Extension, mergeAttributes } from '@tiptap/core'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -11,21 +10,31 @@ function newId(prefix: string): string {
 }
 
 /**
- * StarterKit's Heading has no id. A cross-reference needs one to survive
- * edits, so this gives every heading a stable id assigned once, the moment it
- * becomes a heading — the same treatment captions get.
+ * Headings need a stable id so a cross-reference survives edits.
+ *
+ * Added as a global attribute on the existing heading node rather than by
+ * subclassing Heading: StarterKit bundles its own heading in Tiptap 3, so
+ * swapping in a replacement would mean disabling and re-registering it — this
+ * decorates what is already there and leaves every other heading feature
+ * (styles, the TOC, the outline) untouched.
  */
-export const IdentifiedHeading = Heading.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      refId: {
-        default: null,
-        parseHTML: (el: HTMLElement) => el.getAttribute('data-ref-id'),
-        renderHTML: (attrs: Record<string, unknown>) =>
-          attrs.refId ? { 'data-ref-id': String(attrs.refId) } : {}
+export const HeadingRefId = Extension.create({
+  name: 'headingRefId',
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['heading'],
+        attributes: {
+          refId: {
+            default: null,
+            parseHTML: (el: HTMLElement) => el.getAttribute('data-ref-id'),
+            renderHTML: (attrs: Record<string, unknown>) =>
+              attrs.refId ? { 'data-ref-id': String(attrs.refId) } : {}
+          }
+        }
       }
-    }
+    ]
   }
 })
 

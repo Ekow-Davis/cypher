@@ -1,5 +1,6 @@
 import { shell, BrowserWindow } from 'electron'
 import { join } from 'node:path'
+import icon from '../../build/icon.png?asset'
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
 
@@ -57,6 +58,8 @@ export function createWindow(route = '/'): BrowserWindow | null {
     autoHideMenuBar: true,
     backgroundColor: '#15121d',
     title: 'Cypher',
+    // electron-vite inlines this at build time via ?asset
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

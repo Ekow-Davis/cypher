@@ -4,7 +4,9 @@ import type { Doc, UpdateDocMetaInput } from '@shared/types'
 /** Standalone documents — the word-processor side, unrelated to books. */
 
 export function listDocuments(): Doc[] {
-  return getDb().prepare('SELECT * FROM documents ORDER BY updated_at DESC, id DESC').all() as Doc[]
+  return getDb()
+    .prepare('SELECT * FROM documents WHERE deleted_at IS NULL ORDER BY updated_at DESC, id DESC')
+    .all() as Doc[]
 }
 
 export function getDocument(id: number): Doc | null {
@@ -55,6 +57,7 @@ export function duplicateDocument(id: number): Doc | null {
   return getDocument(Number(info.lastInsertRowid))
 }
 
+/** Soft delete — the document moves to the trash and can be restored. */
 export function deleteDocument(id: number): void {
-  getDb().prepare('DELETE FROM documents WHERE id = ?').run(id)
+  getDb().prepare("UPDATE documents SET deleted_at = datetime('now') WHERE id = ?").run(id)
 }

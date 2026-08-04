@@ -7,6 +7,7 @@ import { useBooksStore } from '@/stores/books'
 import { useReaderStore } from '@/stores/reader'
 import { useDocumentsStore } from '@/stores/documents'
 import { applyScriptFont } from '@/lib/scriptFont'
+import { useFontsStore } from '@/stores/fonts'
 
 /**
  * Keeps windows in step. Main broadcasts which slice of data changed; this
@@ -54,6 +55,7 @@ export function installSync(): void {
           break
         case 'fonts':
           await applyScriptFont()
+          await useFontsStore().load()
           break
         case 'docs':
           // A rename in a document window must reach the list in the other one.
@@ -67,7 +69,8 @@ export function installSync(): void {
             chapters.refresh(),
             lore.refresh(),
             characters.refresh(),
-            books.load()
+            books.load(),
+            documents.refresh(documents.openId)
           ])
           break
         default:

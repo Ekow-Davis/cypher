@@ -8,11 +8,13 @@ import { useThemeStore } from '@/stores/theme'
 import { usePreferencesStore } from '@/stores/preferences'
 import { installSync } from '@/lib/sync'
 import { applyScriptFont } from '@/lib/scriptFont'
+import { useFontsStore } from '@/stores/fonts'
 
 const route = useRoute()
 const appStore = useAppStore()
 const theme = useThemeStore()
 const prefs = usePreferencesStore()
+const fonts = useFontsStore()
 
 watch(
   () => route.meta.themeDomain,
@@ -37,9 +39,23 @@ function snooze(): void {
   void window.cypher.backup.snoozeArchive(3)
 }
 
+// One variable drives both writing surfaces, so a font chosen once applies to
+// the manuscript and the lore editor without either knowing about the setting.
+watch(
+  () => prefs.editorFont,
+  (family) => {
+    document.documentElement.style.setProperty(
+      '--font-editor',
+      family || 'Georgia, "Times New Roman", serif'
+    )
+  },
+  { immediate: true }
+)
+
 onMounted(async () => {
   installSync()
   void applyScriptFont()
+  void fonts.load()
   void theme.load()
   void prefs.load()
   void appStore.init()

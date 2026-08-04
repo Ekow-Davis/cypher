@@ -5,7 +5,7 @@ import { exportPdf } from './exportPdf'
 import { exportEpub } from './exportEpub'
 import { gatherSection } from './sectioned'
 import { exportSectionDocx, exportSectionPdf } from './exportSection'
-import type { SectionKind, SectionExportOptions } from '@shared/types'
+import type { SectionKind, SectionExportOptions, ExportResult } from '@shared/types'
 import type { ExportFormat, ExportOptions } from './types'
 
 export type { ExportFormat, ExportOptions }
@@ -20,12 +20,8 @@ function safeName(title: string): string {
   return title.replace(/[\\/:*?"<>|]/g, '-').trim() || 'Untitled'
 }
 
-export interface ExportResult {
-  path: string | null
-  chapters: number
-  cancelled?: boolean
-  error?: string
-}
+// Declared in shared/types so the renderer sees the identical shape.
+export type { ExportResult } from '@shared/types'
 
 export async function exportBook(
   bookId: number,

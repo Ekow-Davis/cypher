@@ -233,7 +233,7 @@ function openInWindow(id: number): void {
       <div class="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-xl">
         <h2 class="mb-2 text-lg font-bold">Delete this document?</h2>
         <p class="mb-5 text-sm text-ink-dim">
-          This one isn't recoverable from the trash yet — a recent backup would still contain it.
+          It moves to the trash, where it can be restored for the next few days.
         </p>
         <div class="flex justify-end gap-2">
           <button class="rounded-xl px-4 py-2 text-sm font-medium text-ink-dim hover:text-ink" @click="confirmDelete = null">

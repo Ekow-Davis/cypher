@@ -19,6 +19,7 @@ asarUnpack:
 
 win:
   executableName: Cypher
+  icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64]
@@ -26,6 +27,9 @@ win:
       arch: [x64]
 
 nsis:
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true

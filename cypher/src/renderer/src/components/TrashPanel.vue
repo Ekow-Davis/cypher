@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Trash2, RotateCcw, BookOpen, FileText, ScrollText, UserRound } from 'lucide-vue-next'
+import {
+  Trash2,
+  RotateCcw,
+  BookOpen,
+  FileText,
+  ScrollText,
+  UserRound,
+  File as FileIcon
+} from 'lucide-vue-next'
 import type { TrashItem, TrashKind } from '@shared/types'
 
 const items = ref<TrashItem[]>([])
 const error = ref<string | null>(null)
-const retention = ref(30)
+const retention = ref(7)
 const confirmEmpty = ref(false)
 const confirmPurge = ref<TrashItem | null>(null)
 
@@ -13,20 +21,22 @@ const ICONS: Record<TrashKind, typeof BookOpen> = {
   book: BookOpen,
   chapter: FileText,
   lore: ScrollText,
-  character: UserRound
+  character: UserRound,
+  document: FileIcon
 }
 const LABELS: Record<TrashKind, string> = {
   book: 'Book',
   chapter: 'Chapter',
   lore: 'Lore entry',
-  character: 'Character'
+  character: 'Character',
+  document: 'Document'
 }
 
 async function refresh(): Promise<void> {
   try {
     items.value = await window.cypher.trash.list()
     const all = (await window.cypher.settings.getAll()) as Record<string, unknown>
-    retention.value = Number(all.trashRetentionDays ?? 30)
+    retention.value = Number(all.trashRetentionDays ?? 7)
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   }
@@ -57,7 +67,7 @@ function fmt(iso: string): string {
 }
 
 const grouped = computed(() => {
-  const order: TrashKind[] = ['book', 'chapter', 'lore', 'character']
+  const order: TrashKind[] = ['book', 'chapter', 'lore', 'character', 'document']
   return order
     .map((kind) => ({ kind, items: items.value.filter((i) => i.kind === kind) }))
     .filter((g) => g.items.length)

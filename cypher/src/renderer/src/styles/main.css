@@ -23,6 +23,7 @@
   --color-accent-line: color-mix(in srgb, var(--color-accent) 42%, var(--color-border));
 
   --font-script: 'Segoe UI', system-ui, sans-serif;
+  --font-editor: Georgia, 'Times New Roman', serif;
 }
 
 /* ---------- MODE ---------- */
@@ -72,6 +73,8 @@ body {
   min-height: 60vh;
   line-height: 1.75;
   color: var(--color-ink);
+  /* Set once in Settings → Writing; applies to the manuscript and lore editors. */
+  font-family: var(--font-editor, Georgia, 'Times New Roman', serif);
 }
 .cypher-prose:focus {
   outline: none;

@@ -12,7 +12,8 @@ const TABLE: Record<TrashKind, string> = {
   book: 'books',
   chapter: 'chapters',
   lore: 'lore_entries',
-  character: 'characters'
+  character: 'characters',
+  document: 'documents'
 }
 
 export function listTrash(): TrashItem[] {
@@ -53,6 +54,11 @@ export function listTrash(): TrashItem[] {
     .all() as { id: number; title: string; deleted_at: string; context: string | null }[]
   rows.push(...characters.map((c) => ({ kind: 'character' as const, ...c })))
 
+  const documents = db
+    .prepare('SELECT id, title, deleted_at FROM documents WHERE deleted_at IS NOT NULL')
+    .all() as { id: number; title: string; deleted_at: string }[]
+  rows.push(...documents.map((d) => ({ kind: 'document' as const, ...d, context: null })))
+
   return rows.sort((a, b) => b.deleted_at.localeCompare(a.deleted_at))
 }
 
@@ -86,7 +92,7 @@ export function emptyTrash(): number {
 
 /** Drops trashed rows older than the retention window. Runs at startup. */
 export function purgeExpiredTrash(): number {
-  const days = Number(getSetting('trashRetentionDays') ?? 30)
+  const days = Number(getSetting('trashRetentionDays') ?? 7)
   if (days <= 0) return 0
   const db = getDb()
   let n = 0
