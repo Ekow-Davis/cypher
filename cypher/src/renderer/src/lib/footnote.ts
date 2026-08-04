@@ -21,7 +21,14 @@ export const Footnote = Node.create({
 
   addAttributes() {
     return {
-      text: { default: '' }
+      text: { default: '' },
+      // Lets a cross-reference point at this specific note and survive edits.
+      refId: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute('data-ref-id'),
+        renderHTML: (attrs: Record<string, unknown>) =>
+          attrs.refId ? { 'data-ref-id': String(attrs.refId) } : {}
+      }
     }
   },
 
@@ -46,7 +53,10 @@ export const Footnote = Node.create({
       insertFootnote:
         (text: string) =>
         ({ commands }: { commands: any }) =>
-          commands.insertContent({ type: 'footnote', attrs: { text } }),
+          commands.insertContent({
+            type: 'footnote',
+            attrs: { text, refId: `fn-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}` }
+          }),
       updateFootnote:
         (pos: number, text: string) =>
         ({ state, dispatch }: { state: any; dispatch: any }) => {

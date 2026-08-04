@@ -10,6 +10,9 @@ import {
   Footer,
   PageNumber,
   FootnoteReferenceRun,
+  CommentRangeStart,
+  CommentRangeEnd,
+  CommentReference,
   HeadingLevel,
   AlignmentType
 } from 'docx'
@@ -18,10 +21,12 @@ import {
   contentToHtml,
   collectFootnotes,
   withFootnotes,
+  resolveReferences,
   type Block
 } from './tiptapToHtml'
 import { documentToHtml } from './bookHtml'
 import { getDocument } from '../db/repositories/documents'
+import { listComments } from '../db/repositories/comments'
 
 const HEADINGS = [
   HeadingLevel.HEADING_1,
@@ -47,27 +52,47 @@ function withFootnoteRefs(blocks: Block[], total: number): Block[] {
   return blocks
 }
 
+/** Anchor id -> numeric docx comment id, assigned at export time. */
+let commentIds = new Map<string, number>()
+
 function toParagraph(block: Block): Paragraph {
   if (block.kind === 'pagebreak') return new Paragraph({ children: [new PageBreak()] })
-  const children = block.runs.length
-    ? block.runs.map((r) => {
-        const note = (r as { footnote?: number }).footnote
-        if (note) return new FootnoteReferenceRun(note)
-        return new TextRun({ text: r.text, bold: r.bold, italics: r.italic, strike: r.strike })
-      })
-    : [new TextRun('')]
+  const children: (TextRun | FootnoteReferenceRun | CommentRangeStart | CommentRangeEnd | CommentReference)[] =
+    []
+  if (block.runs.length) {
+    for (const r of block.runs) {
+      const note = (r as { footnote?: number }).footnote
+      if (note) {
+        children.push(new FootnoteReferenceRun(note))
+        continue
+      }
+      const id = r.comment ? commentIds.get(r.comment) : undefined
+      // Word needs the range opened, the text, then the range closed and a
+      // reference run — that trio is what makes it a reviewable comment.
+      if (id !== undefined) children.push(new CommentRangeStart(id))
+      children.push(
+        new TextRun({ text: r.text, bold: r.bold, italics: r.italic, strike: r.strike })
+      )
+      if (id !== undefined) {
+        children.push(new CommentRangeEnd(id))
+        children.push(new CommentReference(id))
+      }
+    }
+  } else {
+    children.push(new TextRun(''))
+  }
 
   switch (block.kind) {
     case 'heading':
-      return new Paragraph({ children, heading: HEADINGS[(block.level ?? 2) - 1] })
+      return new Paragraph({ children: children as never, heading: HEADINGS[(block.level ?? 2) - 1] })
     case 'quote':
-      return new Paragraph({ children, indent: { left: 720 } })
+      return new Paragraph({ children: children as never, indent: { left: 720 } })
     case 'bullet':
-      return new Paragraph({ children, bullet: { level: 0 } })
+      return new Paragraph({ children: children as never, bullet: { level: 0 } })
     case 'ordered':
-      return new Paragraph({ children, numbering: { reference: 'doc-ordered', level: 0 } })
+      return new Paragraph({ children: children as never, numbering: { reference: 'doc-ordered', level: 0 } })
     default:
-      return new Paragraph({ children, spacing: { after: 120 } })
+      return new Paragraph({ children: children as never, spacing: { after: 120 } })
   }
 }
 
@@ -121,7 +146,13 @@ export async function exportDocumentAs(
 
   try {
     if (format === 'docx') {
-      const notes = collectFootnotes(doc.content)
+      // Only unresolved comments travel — a resolved one is a settled
+      // conversation, not an outstanding request for change.
+      const resolvedContent = resolveReferences(doc.content)
+      const docComments = listComments(id).filter((c) => !c.resolved)
+      commentIds = new Map(docComments.map((c, i) => [c.anchor, i + 1]))
+
+      const notes = collectFootnotes(resolvedContent)
       // Word footnotes are real page-bottom notes, numbered by Word itself.
       const footnotes = Object.fromEntries(
         notes.map((text, i) => [i + 1, { children: [new Paragraph(text)] }])
@@ -131,6 +162,18 @@ export async function exportDocumentAs(
 
       const document = new Document({
         ...(notes.length ? { footnotes } : {}),
+        ...(docComments.length
+          ? {
+              comments: {
+                children: docComments.map((c) => ({
+                  id: commentIds.get(c.anchor) as number,
+                  author: c.author || 'Cypher',
+                  date: new Date(c.created_at.replace(' ', 'T') + 'Z'),
+                  children: [new Paragraph(c.body)]
+                }))
+              }
+            }
+          : {}),
         numbering: {
           config: [
             {
@@ -149,16 +192,17 @@ export async function exportDocumentAs(
             ...(footerRuns.length
               ? { footers: { default: new Footer({ children: [new Paragraph({ children: footerRuns })] }) } }
               : {}),
-            children: withFootnoteRefs(contentToBlocks(doc.content), notes.length).map(toParagraph)
+            children: withFootnoteRefs(contentToBlocks(resolvedContent), notes.length).map(toParagraph)
           }
         ]
       })
       writeFileSync(picked.filePath, await Packer.toBuffer(document))
     } else {
       // Same HTML the printer and preview use, so all three agree.
+      const resolvedForPdf = resolveReferences(doc.content)
       const html = documentToHtml(
         doc.title,
-        withFootnotes(contentToHtml(doc.content), collectFootnotes(doc.content))
+        withFootnotes(contentToHtml(resolvedForPdf), collectFootnotes(resolvedForPdf))
       )
       const win = new BrowserWindow({
         show: false,

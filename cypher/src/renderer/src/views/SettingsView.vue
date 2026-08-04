@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Check, Database, Palette, PenLine, ShieldCheck, Info } from 'lucide-vue-next'
 import DataSafetyPanel from '@/components/DataSafetyPanel.vue'
+import ScriptFontPanel from '@/components/ScriptFontPanel.vue'
+import DiarySecurityPanel from '@/components/DiarySecurityPanel.vue'
 import TrashPanel from '@/components/TrashPanel.vue'
 import { usePreferencesStore, type FocusWidth } from '@/stores/preferences'
 import { useAppStore } from '@/stores/app'
@@ -109,6 +111,7 @@ onMounted(async () => {
       </button>
     </nav>
 
+    <ScriptFontPanel v-show="section === 'appearance'" class="mb-6" />
     <div v-show="section === 'appearance'" class="rounded-2xl border border-border bg-surface p-6">
       <h2 class="mb-1 text-lg font-semibold">Appearance</h2>
       <p class="mb-6 text-sm leading-relaxed text-ink-dim">
@@ -238,6 +241,7 @@ onMounted(async () => {
       <p v-else-if="dbError" class="text-sm text-red-400">Database error: {{ dbError }}</p>
       <p v-else class="text-sm text-ink-dim">Checking…</p>
     </div>
+    <DiarySecurityPanel v-show="section === 'data'" class="mt-6" />
     <DataSafetyPanel v-show="section === 'data'" class="mt-6" />
     <TrashPanel v-show="section === 'data'" class="mt-6" />
 

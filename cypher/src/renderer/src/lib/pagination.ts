@@ -7,15 +7,26 @@ import type { EditorView } from '@tiptap/pm/view'
 
 export const paginationKey = new PluginKey('cypherPagination')
 
+/** Lets the view trigger a fresh measurement pass. */
+export const remeasureHook = new Map<string, () => void>()
+
 export interface BlockPage {
   offset: number
   page: number
+}
+
+export interface PageNotes {
+  page: number
+  /** 1-based footnote numbers appearing on this page. */
+  notes: number[]
 }
 
 export interface PageLayout {
   pages: number
   /** Which page each top-level block starts on (1-based). */
   blocks: BlockPage[]
+  /** Footnotes that belong at the foot of each page. */
+  notes: PageNotes[]
   /** Distance between the top of one sheet and the next, in px. */
   cycle: number
   /** Sheet height in px. */
@@ -25,6 +36,13 @@ export interface PageLayout {
 interface Options {
   enabled: () => boolean
   onLayout: (layout: PageLayout) => void
+  /**
+   * Height already measured for the note block at the foot of a given page.
+   * Reserving that space changes which content fits, which changes which notes
+   * land there — so this is fed back each pass and settles after a frame or two,
+   * the same fixed-point Word and TeX solve.
+   */
+  noteHeight: (page: number) => number
 }
 
 interface Geometry {
@@ -49,13 +67,16 @@ export const Pagination = Extension.create<Options>({
   name: 'cypherPagination',
 
   addOptions() {
-    return { enabled: () => true, onLayout: () => undefined }
+    return { enabled: () => true, onLayout: () => undefined, noteHeight: () => 0 }
   },
 
   addProseMirrorPlugins() {
-    const { enabled, onLayout } = this.options
+    const { enabled, onLayout, noteHeight } = this.options
     let scheduled = 0
     let signature = ''
+    // exposed so the view can ask for another pass after measuring notes
+    let remeasure: () => void = () => undefined
+    remeasureHook.set(this.name, () => remeasure())
 
     /** All geometry comes from probe elements, so it follows the zoom level. */
     function geometry(view: EditorView): Geometry | null {
@@ -93,12 +114,15 @@ export const Pagination = Extension.create<Options>({
       set: DecorationSet
       pages: number
       blocks: BlockPage[]
+      notes: PageNotes[]
       sig: string
       cycle: number
       sheet: number
     } {
       const geo = geometry(view)
-      if (!geo) return { set: DecorationSet.empty, pages: 1, blocks: [], sig: '', cycle: 0, sheet: 0 }
+      if (!geo) {
+        return { set: DecorationSet.empty, pages: 1, blocks: [], notes: [], sig: '', cycle: 0, sheet: 0 }
+      }
 
       const layerTop = view.dom.getBoundingClientRect().top
       const blocks: {
@@ -107,18 +131,26 @@ export const Pagination = Extension.create<Options>({
         isBreak: boolean
         top: number
         height: number
+        notes: number[]
       }[] = []
 
+      // Global footnote numbering, assigned in document order.
+      let noteCounter = 0
       view.state.doc.forEach((node, offset) => {
         const dom = view.nodeDOM(offset)
         if (!(dom instanceof HTMLElement)) return
         const rect = dom.getBoundingClientRect()
+        const notes: number[] = []
+        node.descendants((child) => {
+          if (child.type.name === 'footnote') notes.push(++noteCounter)
+        })
         blocks.push({
           offset,
           after: offset + node.nodeSize,
           isBreak: node.type.name === 'pageBreak',
           top: rect.top - layerTop,
-          height: rect.height
+          height: rect.height,
+          notes
         })
       })
 
@@ -139,18 +171,26 @@ export const Pagination = Extension.create<Options>({
       const next = new Map<number, number>()
       const parts: string[] = []
       const blockPages: BlockPage[] = []
+      const notesByPage = new Map<number, number[]>()
+      /** Space the notes on a page steal from its text area. */
+      const reserve = (page: number): number => noteHeight(page)
       const carry = geo.margin * 2 + geo.gap
       let used = 0
       let pages = 1
 
+      const addNotes = (page: number, notes: number[]): void => {
+        if (!notes.length) return
+        notesByPage.set(page, [...(notesByPage.get(page) ?? []), ...notes])
+      }
+
       blocks.forEach((b, i) => {
         blockPages.push({ offset: b.offset, page: pages })
+        // Text area shrinks by whatever the notes on this page occupy.
+        const available = Math.max(geo.content * 0.25, geo.content - reserve(pages))
+
         if (b.isBreak) {
-          // The marker itself takes room on the page it ends, so it counts
-          // toward that page and the spacer goes after it — otherwise its
-          // height silently pushed the next page's text down.
           const consumed = used + flow[i]
-          const height = Math.max(0, geo.content - consumed) + carry
+          const height = Math.max(0, available - consumed) + carry + reserve(pages)
           decorations.push(spacer(b.after, height))
           next.set(b.after, height)
           parts.push(`b${b.after}:${Math.round(height)}`)
@@ -160,20 +200,20 @@ export const Pagination = Extension.create<Options>({
         }
 
         const height = flow[i]
-        if (used > 0 && used + height > geo.content && height <= geo.content) {
-          const gapHeight = geo.content - used + carry
+        if (used > 0 && used + height > available && height <= available) {
+          const gapHeight = available - used + carry + reserve(pages)
           decorations.push(spacer(b.offset, gapHeight))
           next.set(b.offset, gapHeight)
           parts.push(`${b.offset}:${Math.round(gapHeight)}`)
           pages += 1
-          // the block itself sits on the new page
           blockPages[blockPages.length - 1].page = pages
+          addNotes(pages, b.notes)
           used = height
         } else {
+          addNotes(pages, b.notes)
           used += height
-          // a block taller than a page spills across the ones after it
-          while (used > geo.content) {
-            used -= geo.content
+          while (used > available) {
+            used -= available
             pages += 1
           }
         }
@@ -184,6 +224,7 @@ export const Pagination = Extension.create<Options>({
         set: DecorationSet.create(view.state.doc, decorations),
         pages,
         blocks: blockPages,
+        notes: [...notesByPage.entries()].map(([page, notes]) => ({ page, notes })),
         sig: parts.join('|'),
         cycle: geo.page + geo.gap,
         sheet: geo.page
@@ -211,14 +252,14 @@ export const Pagination = Extension.create<Options>({
             if (!enabled()) {
               signature = ''
               applied = new Map()
-              onLayout({ pages: 1, blocks: [], cycle: 0, sheet: 0 })
+              onLayout({ pages: 1, blocks: [], notes: [], cycle: 0, sheet: 0 })
               if (paginationKey.getState(view.state) !== DecorationSet.empty) {
                 view.dispatch(view.state.tr.setMeta(paginationKey, DecorationSet.empty))
               }
               return
             }
-            const { set, pages, blocks, sig, cycle, sheet } = build(view)
-            onLayout({ pages, blocks, cycle, sheet })
+            const { set, pages, blocks, notes, sig, cycle, sheet } = build(view)
+            onLayout({ pages, blocks, notes, cycle, sheet })
             // Dispatching unconditionally would re-trigger measurement forever.
             if (sig !== signature) {
               signature = sig
@@ -239,6 +280,7 @@ export const Pagination = Extension.create<Options>({
           const host = view.dom.closest('.doc-canvas')
           if (host) observer.observe(host)
 
+          remeasure = schedule
           return {
             update: schedule,
             destroy() {

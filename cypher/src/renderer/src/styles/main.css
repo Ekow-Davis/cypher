@@ -502,3 +502,44 @@ body {
 .footnote-item {
   margin: 0.2em 0;
 }
+
+/* Notes sitting at the foot of their own page, inside the sheet's text column. */
+.sheet-notes {
+  position: absolute;
+  border-top: 1px solid #c9c9cf;
+  padding-top: 0.12in;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 9.5pt;
+  line-height: 1.35;
+  color: #333;
+  pointer-events: none;
+}
+.sheet-notes sup {
+  font-weight: 700;
+  color: #2563eb;
+  margin-right: 0.25em;
+}
+
+/* ---------- Comments ---------- */
+.comment-anchor {
+  background: rgb(250 204 21 / 32%);
+  border-bottom: 2px solid rgb(234 179 8 / 75%);
+  cursor: pointer;
+}
+.comment-anchor[data-resolved='true'] {
+  background: transparent;
+  border-bottom: 1px dotted rgb(148 163 184 / 80%);
+}
+
+/* ---------- Captions & cross-references ---------- */
+.caption-block {
+  font-size: 0.88em;
+  color: #444;
+  margin: 0.3em 0 0.9em;
+}
+.crossref {
+  color: #2563eb;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 1px dotted #2563eb;
+}

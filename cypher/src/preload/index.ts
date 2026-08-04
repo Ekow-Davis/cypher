@@ -20,6 +20,12 @@ import type {
   UpdateNoteInput,
   Doc,
   UpdateDocMetaInput,
+  DocComment,
+  CreateCommentInput,
+  CreateEntryInput,
+  Diary,
+  DiaryEntry,
+  DiarySecurityStatus,
   ReaderMark,
   CreateMarkInput,
   UpdateMarkInput,
@@ -244,6 +250,66 @@ const cypher = {
       format: 'docx' | 'pdf'
     ): Promise<{ path: string | null; cancelled?: boolean; error?: string }> =>
       ipcRenderer.invoke('docs:exportAs', id, format)
+  },
+
+  diary: {
+    status: (): Promise<DiarySecurityStatus> => ipcRenderer.invoke('diary:status'),
+    setup: (entryPass: string, translatePass: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke('diary:setup', entryPass, translatePass),
+    unlock: (
+      password: string
+    ): Promise<{ ok: boolean; reason?: string; lockedUntil?: string }> =>
+      ipcRenderer.invoke('diary:unlock', password),
+    lock: (): Promise<void> => ipcRenderer.invoke('diary:lock'),
+    isUnlocked: (): Promise<boolean> => ipcRenderer.invoke('diary:isUnlocked'),
+    unlockTranslation: (
+      password: string
+    ): Promise<{ ok: boolean; reason?: string }> =>
+      ipcRenderer.invoke('diary:unlockTranslation', password),
+    lockTranslation: (): Promise<void> => ipcRenderer.invoke('diary:lockTranslation'),
+    isTranslated: (): Promise<boolean> => ipcRenderer.invoke('diary:isTranslated'),
+    translateRemaining: (): Promise<number> => ipcRenderer.invoke('diary:translateRemaining'),
+    changePasswords: (
+      current: string,
+      newEntry: string | null,
+      newTranslate: string | null
+    ): Promise<{ ok: boolean; reason?: string }> =>
+      ipcRenderer.invoke('diary:changePasswords', current, newEntry, newTranslate),
+
+    listDiaries: (): Promise<Diary[]> => ipcRenderer.invoke('diary:listDiaries'),
+    createDiary: (name: string): Promise<Diary> => ipcRenderer.invoke('diary:createDiary', name),
+    renameDiary: (id: number, name: string): Promise<Diary | null> =>
+      ipcRenderer.invoke('diary:renameDiary', id, name),
+    deleteDiary: (id: number): Promise<void> => ipcRenderer.invoke('diary:deleteDiary', id),
+    listEntries: (diaryId: number | null): Promise<DiaryEntry[]> =>
+      ipcRenderer.invoke('diary:listEntries', diaryId),
+    createEntry: (input: CreateEntryInput): Promise<DiaryEntry | null> =>
+      ipcRenderer.invoke('diary:createEntry', input),
+    saveEntry: (id: number, title: string, content: string): Promise<DiaryEntry | null> =>
+      ipcRenderer.invoke('diary:saveEntry', id, title, content),
+    deleteEntry: (id: number): Promise<void> => ipcRenderer.invoke('diary:deleteEntry', id),
+    monthGroups: (diaryId: number | null): Promise<{ month: string; count: number }[]> =>
+      ipcRenderer.invoke('diary:monthGroups', diaryId)
+  },
+
+  fonts: {
+    import: (): Promise<{ fileName: string; path: string; format: string } | null> =>
+      ipcRenderer.invoke('fonts:import'),
+    get: (): Promise<{ fileName: string; path: string; format: string } | null> =>
+      ipcRenderer.invoke('fonts:get'),
+    clear: (): Promise<void> => ipcRenderer.invoke('fonts:clear')
+  },
+
+  comments: {
+    list: (documentId: number): Promise<DocComment[]> =>
+      ipcRenderer.invoke('comments:list', documentId),
+    create: (input: CreateCommentInput): Promise<DocComment> =>
+      ipcRenderer.invoke('comments:create', input),
+    update: (id: number, body: string): Promise<DocComment | null> =>
+      ipcRenderer.invoke('comments:update', id, body),
+    resolve: (id: number, resolved: boolean): Promise<DocComment | null> =>
+      ipcRenderer.invoke('comments:resolve', id, resolved),
+    remove: (id: number): Promise<void> => ipcRenderer.invoke('comments:delete', id)
   },
 
   notes: {

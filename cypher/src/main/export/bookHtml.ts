@@ -134,6 +134,8 @@ export const DOC_PRINT_CSS = `
   .footnotes { margin-top: 2em; padding-top: 0.8em; border-top: 1px solid #c9c9cf; font-size: 0.85em; color: #444; }
   .footnotes-title { font-weight: 700; margin-bottom: 0.4em; }
   .footnote-item { margin: 0.2em 0; }
+  .caption-block { font-size: 0.88em; color: #444; margin: 0.3em 0 0.9em; }
+  .crossref { color: #2563eb; font-weight: 600; }
 `
 
 /** Wraps a document's rendered body in a printable page. */

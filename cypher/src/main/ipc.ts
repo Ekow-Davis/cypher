@@ -41,6 +41,37 @@ import {
   deleteDocument
 } from './db/repositories/documents'
 import { toPrintTemplate, hasRunningText } from './runningText'
+import { importScriptFont, getScriptFont, clearScriptFont } from './fonts'
+import {
+  securityStatus,
+  setupDiary,
+  unlockDiary,
+  lockDiary,
+  isUnlocked,
+  unlockTranslation,
+  lockTranslation,
+  isTranslated,
+  translateRemainingMs,
+  changePasswords
+} from './diarySecurity'
+import {
+  listDiaries,
+  createDiary,
+  renameDiary,
+  deleteDiary,
+  listEntries,
+  createEntry,
+  saveEntry,
+  deleteEntry,
+  listMonthGroups
+} from './db/repositories/diary'
+import {
+  listComments,
+  createComment,
+  updateComment,
+  resolveComment,
+  deleteComment
+} from './db/repositories/comments'
 import {
   listTrash,
   restoreTrashItem,
@@ -102,7 +133,12 @@ import { importDocx } from './docx'
 import { exportDocumentAs } from './export/exportDocument'
 import { gatherBook } from './export/gather'
 import { bookToHtml, documentToHtml } from './export/bookHtml'
-import { contentToHtml, collectFootnotes, withFootnotes } from './export/tiptapToHtml'
+import {
+  contentToHtml,
+  collectFootnotes,
+  withFootnotes,
+  resolveReferences
+} from './export/tiptapToHtml'
 import {
   openWindow,
   windowCount,
@@ -132,6 +168,8 @@ import type {
   UpdateMarkInput,
   UpdateNoteInput,
   UpdateDocMetaInput,
+  CreateCommentInput,
+  CreateEntryInput,
   TrashKind,
   UpdateChapterMetaInput,
   ExportFormat,
@@ -391,17 +429,19 @@ export function registerIpcHandlers(): void {
   handle('print:document', (_e, id: number) => {
     const doc = getDocument(id)
     if (!doc) return { ok: false, reason: 'Document not found.' }
-    const body = withFootnotes(contentToHtml(doc.content), collectFootnotes(doc.content))
+    const resolved = resolveReferences(doc.content)
+    const body = withFootnotes(contentToHtml(resolved), collectFootnotes(resolved))
     return printHtml(documentToHtml(doc.title, body), {
       display: hasRunningText(doc.header, doc.footer),
-      header: toPrintTemplate(doc.header, doc.title),
-      footer: toPrintTemplate(doc.footer, doc.title)
+      header: toPrintTemplate(doc.header, doc.title, doc.header_align),
+      footer: toPrintTemplate(doc.footer, doc.title, doc.footer_align)
     })
   })
   handle('print:previewDocument', (_e, id: number) => {
     const doc = getDocument(id)
     if (!doc) return null
-    const body = withFootnotes(contentToHtml(doc.content), collectFootnotes(doc.content))
+    const resolved = resolveReferences(doc.content)
+    const body = withFootnotes(contentToHtml(resolved), collectFootnotes(resolved))
     return previewHtml(documentToHtml(doc.title, body), {
       display: hasRunningText(doc.header, doc.footer),
       header: toPrintTemplate(doc.header, doc.title),
@@ -453,6 +493,52 @@ export function registerIpcHandlers(): void {
   handle('docs:exportAs', (_e, id: number, format: 'docx' | 'pdf') =>
     exportDocumentAs(id, format)
   )
+
+  // Diary security
+  handle('diary:status', () => securityStatus())
+  handle('diary:setup', (_e, entryPass: string, translatePass: string) => {
+    setupDiary(entryPass, translatePass)
+    return { ok: true }
+  })
+  handle('diary:unlock', (_e, password: string) => unlockDiary(password))
+  handle('diary:lock', () => lockDiary())
+  handle('diary:isUnlocked', () => isUnlocked())
+  handle('diary:unlockTranslation', (_e, password: string) => unlockTranslation(password))
+  handle('diary:lockTranslation', () => lockTranslation())
+  handle('diary:isTranslated', () => isTranslated())
+  handle('diary:translateRemaining', () => translateRemainingMs())
+  handle('diary:changePasswords', (_e, current: string, newEntry: string | null, newTranslate: string | null) =>
+    changePasswords(current, newEntry, newTranslate)
+  )
+
+  // Diaries & entries — every handler returns [] / null while locked, never
+  // throws, so the renderer can treat "locked" as an ordinary empty state.
+  handle('diary:listDiaries', () => listDiaries())
+  handle('diary:createDiary', (_e, name: string) => createDiary(name))
+  handle('diary:renameDiary', (_e, id: number, name: string) => renameDiary(id, name))
+  handle('diary:deleteDiary', (_e, id: number) => deleteDiary(id))
+  handle('diary:listEntries', (_e, diaryId: number | null) => listEntries(diaryId))
+  handle('diary:createEntry', (_e, input: CreateEntryInput) => createEntry(input))
+  handle('diary:saveEntry', (_e, id: number, title: string, content: string) =>
+    saveEntry(id, title, content)
+  )
+  handle('diary:deleteEntry', (_e, id: number) => deleteEntry(id))
+  handle('diary:monthGroups', (_e, diaryId: number | null) => listMonthGroups(diaryId))
+
+  // Script font (diary "translation")
+  handle('fonts:import', () => importScriptFont())
+  handle('fonts:get', () => getScriptFont())
+  handle('fonts:clear', async () => {
+    clearScriptFont()
+    broadcastDataChanged('fonts')
+  })
+
+  // Document comments
+  handle('comments:list', (_e, documentId: number) => listComments(documentId))
+  handle('comments:create', (_e, input: CreateCommentInput) => createComment(input))
+  handle('comments:update', (_e, id: number, body: string) => updateComment(id, body))
+  handle('comments:resolve', (_e, id: number, resolved: boolean) => resolveComment(id, resolved))
+  handle('comments:delete', (_e, id: number) => deleteComment(id))
 
   // Notes
   handle('notes:list', (_e, ownerType: string, ownerId: number) =>

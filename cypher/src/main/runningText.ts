@@ -15,14 +15,21 @@ function escapeHtml(s: string): string {
 }
 
 /** Chromium fills these spans itself while paginating. */
-export function toPrintTemplate(template: string, title: string): string {
+export function toPrintTemplate(
+  template: string,
+  title: string,
+  align: 'left' | 'center' | 'right' = 'center'
+): string {
   if (!template.trim()) return '<span></span>'
   const html = escapeHtml(template)
     .replace(/\{page\}/g, '<span class="pageNumber"></span>')
     .replace(/\{pages\}/g, '<span class="totalPages"></span>')
     .replace(/\{title\}/g, escapeHtml(title))
     .replace(/\{date\}/g, '<span class="date"></span>')
-  return `<div style="width:100%;font-family:Georgia,serif;font-size:9pt;color:#444;padding:0 0.7in;display:flex;justify-content:space-between;">${html}</div>`
+  // A flex row with space-between pushed each fragment to an edge, which is why
+  // "Page 4 of 6" came out spread across the page. Plain text with text-align
+  // keeps it as one phrase.
+  return `<div style="width:100%;font-family:Georgia,serif;font-size:9pt;color:#444;padding:0 0.7in;text-align:${align};">${html}</div>`
 }
 
 export function hasRunningText(header: string, footer: string): boolean {

@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, type Component } from 'vue'
+import {
+  ref,
+  computed,
+  watch,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+  type Component
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Node } from '@tiptap/core'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
@@ -39,6 +47,15 @@ import {
   PanelLeft,
   Heading,
   StickyNote,
+  MessageSquare,
+  Link as LinkIcon,
+  Image as ImageIconRef,
+  ListOrdered as ListOrderedRef,
+  Check as CheckIcon,
+  Trash2 as TrashIcon,
+  AlignLeft as AlignLeftIcon,
+  AlignCenter as AlignCenterIcon,
+  AlignRight as AlignRightIcon,
   Table as TableIcon,
   ImagePlus,
   Rows3,
@@ -70,11 +87,22 @@ import {
 import { useDocumentsStore } from '@/stores/documents'
 import { usePreferencesStore } from '@/stores/preferences'
 import { assetUrl } from '@/lib/assets'
-import { Pagination, type PageLayout } from '@/lib/pagination'
+import { Pagination, remeasureHook, type PageLayout } from '@/lib/pagination'
 import { FindReplace, findKey, findMatches, type Match } from '@/lib/findReplace'
 import { TableOfContents, type TocEntry } from '@/lib/toc'
 import { Footnote } from '@/lib/footnote'
+import { CommentMark, findCommentPos } from '@/lib/comment'
+import {
+  CrossReference,
+  Caption,
+  IdentifiedHeading,
+  collectReferenceables,
+  displayFor,
+  newId,
+  type Referenceable
+} from '@/lib/crossref'
 import PrintPreview from './PrintPreview.vue'
+import PromptDialog from '@/components/PromptDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -87,6 +115,45 @@ const status = ref<SaveStatus>('saved')
 const title = ref('')
 const zoom = ref(100)
 const showColor = ref(false)
+
+const prompt = ref<{
+  open: boolean
+  title: string
+  value: string
+  placeholder: string
+  multiline: boolean
+  confirmLabel: string
+}>({ open: false, title: '', value: '', placeholder: '', multiline: false, confirmLabel: 'Save' })
+let promptResolve: ((value: string | null) => void) | null = null
+
+/** Promise-based stand-in for window.prompt, which Electron disables. */
+function ask(options: {
+  title: string
+  value?: string
+  placeholder?: string
+  multiline?: boolean
+  confirmLabel?: string
+}): Promise<string | null> {
+  prompt.value = {
+    open: true,
+    title: options.title,
+    value: options.value ?? '',
+    placeholder: options.placeholder ?? '',
+    multiline: options.multiline ?? false,
+    confirmLabel: options.confirmLabel ?? 'Save'
+  }
+  return new Promise((resolve) => (promptResolve = resolve))
+}
+function onPromptSubmit(value: string): void {
+  prompt.value.open = false
+  promptResolve?.(value)
+  promptResolve = null
+}
+function onPromptCancel(): void {
+  prompt.value.open = false
+  promptResolve?.(null)
+  promptResolve = null
+}
 const isSecondary = ref(false)
 
 /**
@@ -170,7 +237,8 @@ const SizedImage = TiptapImage.extend({
 
 const editor = useEditor({
   extensions: [
-    StarterKit,
+    StarterKit.configure({ heading: false }),
+    IdentifiedHeading,
     Underline,
     TextStyle,
     Color,
@@ -191,11 +259,16 @@ const editor = useEditor({
       onLayout: (l: PageLayout) => {
         layout.value = l
         pageCount.value = l.pages
-      }
+        void nextTick(measureNotes)
+      },
+      noteHeight: (page: number) => noteHeights.get(page) ?? 0
     }),
     FindReplace,
     TableOfContents,
     Footnote,
+    CommentMark,
+    CrossReference,
+    Caption,
     SizedImage.configure({ inline: false, allowBase64: true }),
     Placeholder.configure({ placeholder: 'Start writing…' })
   ],
@@ -236,6 +309,9 @@ async function boot(): Promise<void> {
   store.openId = doc.id
   header.value = doc.header ?? ''
   footer.value = doc.footer ?? ''
+  headerAlign.value = (doc.header_align as RunningAlign) ?? 'center'
+  footerAlign.value = (doc.footer_align as RunningAlign) ?? 'center'
+  void loadComments()
   title.value = doc.title
   let content: unknown = ''
   if (doc.content) {
@@ -277,9 +353,14 @@ async function commitTitle(): Promise<void> {
   }
 }
 
-function setLink(): void {
+async function setLink(): Promise<void> {
   const previous = editor.value?.getAttributes('link').href ?? ''
-  const url = window.prompt('Link URL', previous)
+  const url = await ask({
+    title: 'Link URL',
+    value: previous,
+    placeholder: 'https://…',
+    confirmLabel: 'Apply'
+  })
   if (url === null) return
   if (url === '') {
     editor.value?.chain().focus().extendMarkRange('link').unsetLink().run()
@@ -362,8 +443,172 @@ const busyFile = ref(false)
 const showOutline = ref(false)
 const header = ref('')
 const footer = ref('')
+const headerAlign = ref<RunningAlign>('center')
+const footerAlign = ref<RunningAlign>('center')
+const ALIGNS: { key: RunningAlign; icon: typeof AlignLeftIcon }[] = [
+  { key: 'left', icon: AlignLeftIcon },
+  { key: 'center', icon: AlignCenterIcon },
+  { key: 'right', icon: AlignRightIcon }
+]
 let metaTimer: ReturnType<typeof setTimeout> | null = null
 const showNotes = ref(false)
+const showComments = ref(false)
+const showRefPicker = ref(false)
+const refQuery = ref('')
+
+const referenceables = computed<Referenceable[]>(() => {
+  const ed = editor.value
+  if (!ed) return []
+  return collectReferenceables(ed.state.doc)
+})
+const filteredRefs = computed(() => {
+  const q = refQuery.value.trim().toLowerCase()
+  if (!q) return referenceables.value
+  return referenceables.value.filter(
+    (r) => r.label.toLowerCase().includes(q) || displayFor(r).toLowerCase().includes(q)
+  )
+})
+
+function insertReference(ref: Referenceable): void {
+  editor.value?.chain().focus().insertCrossReference(ref.id, ref.kind, displayFor(ref)).run()
+  showRefPicker.value = false
+  refQuery.value = ''
+}
+
+/**
+ * Re-resolves every cross-reference's displayed text against the current
+ * numbering. Run on demand — like the table of contents — rather than on every
+ * keystroke, which would fight the paginator that's already re-measuring.
+ */
+function refreshReferences(): void {
+  const ed = editor.value
+  if (!ed) return
+  const byId = new Map(referenceables.value.map((r) => [r.id, r]))
+  const tr = ed.state.tr
+  let changed = false
+  ed.state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'crossref') return
+    const target = byId.get(node.attrs.targetId)
+    const display = target ? displayFor(target) : '(missing)'
+    if (display !== node.attrs.display) {
+      tr.setNodeMarkup(pos, undefined, { ...node.attrs, display })
+      changed = true
+    }
+  })
+  if (changed) ed.view.dispatch(tr)
+}
+
+function insertCaption(kind: 'figure' | 'table'): void {
+  editor.value?.chain().focus().insertCaption(kind, newId(kind)).run()
+}
+const comments = ref<DocComment[]>([])
+
+async function loadComments(): Promise<void> {
+  if (loadedId == null) return
+  try {
+    comments.value = await window.cypher.comments.list(loadedId)
+  } catch {
+    comments.value = []
+  }
+}
+
+const openComments = computed(() => comments.value.filter((c) => !c.resolved))
+const resolvedComments = computed(() => comments.value.filter((c) => c.resolved))
+
+async function addComment(): Promise<void> {
+  const ed = editor.value
+  if (!ed || loadedId == null) return
+  const { from, to } = ed.state.selection
+  if (from === to) {
+    notify('Select some text to comment on.')
+    return
+  }
+  const body = await ask({
+    title: 'New comment',
+    placeholder: 'What needs changing?',
+    multiline: true,
+    confirmLabel: 'Comment'
+  })
+  if (body === null || !body.trim()) return
+
+  const anchor = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+  const created = await window.cypher.comments.create({
+    documentId: loadedId,
+    anchor,
+    author: prefs.defaultAuthor || 'You',
+    body: body.trim(),
+    quote: ed.state.doc.textBetween(from, to, ' ').slice(0, 200)
+  })
+  ed.chain().focus().setComment(anchor).run()
+  comments.value.push(created)
+  showComments.value = true
+  await saveNow()
+}
+
+async function toggleResolved(comment: DocComment): Promise<void> {
+  const next = !comment.resolved
+  const updated = await window.cypher.comments.resolve(comment.id, next)
+  if (updated) Object.assign(comment, updated)
+  editor.value?.chain().focus().markCommentResolved(comment.anchor, next).run()
+  await saveNow()
+}
+
+async function removeComment(comment: DocComment): Promise<void> {
+  await window.cypher.comments.remove(comment.id)
+  comments.value = comments.value.filter((c) => c.id !== comment.id)
+  editor.value?.chain().focus().unsetComment(comment.anchor).run()
+  await saveNow()
+}
+
+function goToComment(comment: DocComment): void {
+  const ed = editor.value
+  if (!ed) return
+  const pos = findCommentPos(ed.state, comment.anchor)
+  if (pos == null) return
+  ed.chain().focus().setTextSelection(pos + 1).run()
+  const dom = ed.view.domAtPos(pos).node as HTMLElement
+  const el = dom.nodeType === 1 ? dom : dom.parentElement
+  el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+}
+
+function fmtWhen(iso: string): string {
+  return new Date(iso.replace(' ', 'T') + 'Z').toLocaleDateString()
+}
+
+/** Notes belonging at the foot of a given page. */
+function notesForPage(page: number): NoteItem[] {
+  const entry = layout.value.notes.find((n) => n.page === page)
+  if (!entry) return []
+  return entry.notes
+    .map((num) => footnotes.value[num - 1])
+    .filter((n): n is NoteItem => Boolean(n))
+}
+
+/**
+ * Measures each page's rendered note block and, if it differs from what the
+ * paginator reserved, asks for another pass. Comparing before re-running is
+ * what stops the reserve/reflow cycle from oscillating forever.
+ */
+function measureNotes(): void {
+  let changed = false
+  for (const [page, el] of Object.entries(noteRefs.value)) {
+    if (!el) continue
+    const measured = el.getBoundingClientRect().height
+    const known = noteHeights.get(Number(page)) ?? 0
+    if (Math.abs(measured - known) > 1) {
+      noteHeights.set(Number(page), measured)
+      changed = true
+    }
+  }
+  // Drop stale entries for pages that no longer carry notes.
+  for (const page of [...noteHeights.keys()]) {
+    if (!layout.value.notes.some((n) => n.page === page)) {
+      noteHeights.delete(page)
+      changed = true
+    }
+  }
+  if (changed) remeasureHook.get('cypherPagination')?.()
+}
 
 interface NoteItem {
   pos: number
@@ -383,15 +628,20 @@ const footnotes = computed<NoteItem[]>(() => {
   return out
 })
 
-function addFootnote(): void {
-  const text = window.prompt('Footnote text')
+async function addFootnote(): Promise<void> {
+  const text = await ask({
+    title: 'Footnote text',
+    placeholder: 'The note that appears at the foot of the page…',
+    multiline: true,
+    confirmLabel: 'Insert'
+  })
   if (text === null) return
   editor.value?.chain().focus().insertFootnote(text.trim()).run()
   showNotes.value = true
 }
 
-function editFootnote(note: NoteItem): void {
-  const text = window.prompt('Footnote text', note.text)
+async function editFootnote(note: NoteItem): Promise<void> {
+  const text = await ask({ title: 'Edit footnote', value: note.text, multiline: true })
   if (text === null) return
   editor.value?.chain().focus().updateFootnote(note.pos, text.trim()).run()
 }
@@ -419,7 +669,12 @@ function scheduleMetaSave(): void {
   if (metaTimer) clearTimeout(metaTimer)
   metaTimer = setTimeout(() => {
     if (loadedId != null) {
-      void store.saveMeta(loadedId, { header: header.value, footer: footer.value })
+      void store.saveMeta(loadedId, {
+        header: header.value,
+        footer: footer.value,
+        header_align: headerAlign.value,
+        footer_align: footerAlign.value
+      })
     }
   }, 600)
 }
@@ -462,6 +717,7 @@ function insertToc(): void {
 function refreshToc(): void {
   const ok = editor.value?.chain().focus().refreshTableOfContents(tocEntries()).run()
   if (!ok) insertToc()
+  refreshReferences()
 }
 
 function goToHeading(h: Heading): void {
@@ -577,7 +833,10 @@ function closeFind(): void {
   pushMatches()
 }
 const pageCount = ref(1)
-const layout = ref<PageLayout>({ pages: 1, cycle: 0, sheet: 0 })
+const layout = ref<PageLayout>({ pages: 1, blocks: [], notes: [], cycle: 0, sheet: 0 })
+/** Measured height of each page's note block, fed back into the paginator. */
+const noteHeights = new Map<number, number>()
+const noteRefs = ref<Record<number, HTMLElement | null>>({})
 const MARGIN_PRESETS = [
   { key: 'narrow', label: 'Narrow', inches: 0.6 },
   { key: 'normal', label: 'Normal', inches: 1 },
@@ -941,6 +1200,16 @@ onBeforeUnmount(() => {
         class="w-36 rounded-lg border border-border bg-surface px-2 py-1 text-xs outline-none focus:border-accent-line"
         @input="scheduleMetaSave"
       />
+      <button
+        v-for="a in ALIGNS"
+        :key="`h-${a.key}`"
+        class="doc-btn"
+        :class="headerAlign === a.key ? 'doc-btn-on' : ''"
+        :title="`Header ${a.key}`"
+        @click="headerAlign = a.key; scheduleMetaSave()"
+      >
+        <component :is="a.icon" :size="13" />
+      </button>
       <span class="text-xs text-ink-dim">Footer:</span>
       <input
         v-model="footer"
@@ -948,6 +1217,16 @@ onBeforeUnmount(() => {
         class="w-40 rounded-lg border border-border bg-surface px-2 py-1 text-xs outline-none focus:border-accent-line"
         @input="scheduleMetaSave"
       />
+      <button
+        v-for="a in ALIGNS"
+        :key="`f-${a.key}`"
+        class="doc-btn"
+        :class="footerAlign === a.key ? 'doc-btn-on' : ''"
+        :title="`Footer ${a.key}`"
+        @click="footerAlign = a.key; scheduleMetaSave()"
+      >
+        <component :is="a.icon" :size="13" />
+      </button>
       <span class="text-[10px] text-ink-dim">{page} {pages} {title} {date}</span>
 
       <span class="doc-sep" />
@@ -975,6 +1254,18 @@ onBeforeUnmount(() => {
         <RefreshCw :size="15" /> <span class="ml-1 text-xs">Update</span>
       </button>
       <span class="doc-sep" />
+      <button class="doc-btn" title="Comment on the selected text" @click="addComment">
+        <MessageSquare :size="15" /> <span class="ml-1 text-xs">Comment</span>
+      </button>
+      <button
+        class="doc-btn"
+        :class="showComments ? 'doc-btn-on' : ''"
+        title="Show comments"
+        @click="showComments = !showComments"
+      >
+        <MessageSquare :size="15" /> <span class="ml-1 text-xs">All ({{ openComments.length }})</span>
+      </button>
+      <span class="doc-sep" />
       <button class="doc-btn" title="Insert a footnote here" @click="addFootnote">
         <StickyNote :size="15" /> <span class="ml-1 text-xs">Footnote</span>
       </button>
@@ -995,9 +1286,27 @@ onBeforeUnmount(() => {
       >
         <PanelLeft :size="15" /> <span class="ml-1 text-xs">Navigation</span>
       </button>
+      <span class="doc-sep" />
+      <button class="doc-btn" title="Caption a figure above" @click="insertCaption('figure')">
+        <ImageIconRef :size="15" /> <span class="ml-1 text-xs">Figure caption</span>
+      </button>
+      <button class="doc-btn" title="Caption a table above" @click="insertCaption('table')">
+        <ListOrderedRef :size="15" /> <span class="ml-1 text-xs">Table caption</span>
+      </button>
+      <span class="doc-sep" />
+      <button
+        class="doc-btn"
+        title="Insert a cross-reference — jumps and stays correct if things move"
+        @click="showRefPicker = true"
+      >
+        <LinkIcon :size="15" /> <span class="ml-1 text-xs">Cross-reference</span>
+      </button>
+      <button class="doc-btn" title="Update all cross-references" @click="refreshReferences">
+        <RefreshCw :size="15" /> <span class="ml-1 text-xs">Update refs</span>
+      </button>
       <span class="ml-auto text-[10px] text-ink-dim">
-        {{ headings.length }} heading{{ headings.length === 1 ? '' : 's' }} · page numbers update
-        when you press Update
+        {{ headings.length }} heading{{ headings.length === 1 ? '' : 's' }} · page &amp; ref numbers
+        update when you press Update
       </span>
     </div>
 
@@ -1171,11 +1480,29 @@ onBeforeUnmount(() => {
               class="doc-sheet"
               :style="{ top: (n - 1) * layout.cycle + 'px', height: layout.sheet + 'px' }"
             >
-              <div v-if="header" class="sheet-running sheet-header" :style="{ height: marginIn + 'in' }">
+              <div
+                v-if="header"
+                class="sheet-running sheet-header"
+                :style="{ height: marginIn + 'in', justifyContent: headerAlign === 'left' ? 'flex-start' : headerAlign === 'right' ? 'flex-end' : 'center' }"
+              >
                 {{ runningText(header, n) }}
               </div>
-              <div v-if="footer" class="sheet-running sheet-footer" :style="{ height: marginIn + 'in' }">
+              <div
+                v-if="footer"
+                class="sheet-running sheet-footer"
+                :style="{ height: marginIn + 'in', justifyContent: footerAlign === 'left' ? 'flex-start' : footerAlign === 'right' ? 'flex-end' : 'center' }"
+              >
                 {{ runningText(footer, n) }}
+              </div>
+              <div
+                v-if="notesForPage(n).length"
+                :ref="(el) => (noteRefs[n] = el as HTMLElement | null)"
+                class="sheet-notes"
+                :style="{ bottom: marginIn + 'in', left: marginIn + 'in', right: marginIn + 'in' }"
+              >
+                <div v-for="note in notesForPage(n)" :key="note.pos" class="footnote-item">
+                  <sup>{{ note.index }}</sup> {{ note.text || '(empty note)' }}
+                </div>
               </div>
             </div>
           </template>
@@ -1185,6 +1512,52 @@ onBeforeUnmount(() => {
         <EditorContent :editor="editor" class="doc-layer" />
         </div>
       </div>
+
+      <aside
+        v-if="showComments"
+        class="w-72 shrink-0 overflow-auto border-l border-border bg-surface py-2"
+      >
+        <div class="px-4 py-1 text-xs font-semibold uppercase tracking-wider text-ink-dim">
+          Comments
+        </div>
+        <p v-if="!comments.length" class="px-4 py-3 text-xs text-ink-dim">
+          Select text and press Comment to leave one.
+        </p>
+
+        <div
+          v-for="c in [...openComments, ...resolvedComments]"
+          :key="c.id"
+          class="group mx-2 mb-2 rounded-lg border border-border p-2"
+          :class="c.resolved ? 'opacity-55' : ''"
+        >
+          <div class="mb-1 flex items-center gap-2">
+            <span class="truncate text-xs font-semibold">{{ c.author || 'You' }}</span>
+            <span class="shrink-0 text-[10px] text-ink-dim">{{ fmtWhen(c.created_at) }}</span>
+            <button
+              class="ml-auto shrink-0 rounded p-0.5 text-ink-dim hover:text-accent"
+              :title="c.resolved ? 'Reopen' : 'Resolve'"
+              @click="toggleResolved(c)"
+            >
+              <CheckIcon :size="12" />
+            </button>
+            <button
+              class="shrink-0 rounded p-0.5 text-ink-dim hover:text-red-400"
+              title="Delete"
+              @click="removeComment(c)"
+            >
+              <TrashIcon :size="12" />
+            </button>
+          </div>
+          <p
+            v-if="c.quote"
+            class="mb-1 cursor-pointer truncate border-l-2 border-accent pl-2 text-[11px] italic text-ink-dim"
+            @click="goToComment(c)"
+          >
+            {{ c.quote }}
+          </p>
+          <p class="text-xs">{{ c.body }}</p>
+        </div>
+      </aside>
 
       <aside
         v-if="showNotes"
@@ -1260,6 +1633,54 @@ onBeforeUnmount(() => {
 
       <button class="doc-btn ml-auto" title="Close (Esc)" @click="closeFind"><X :size="14" /></button>
     </div>
+
+    <div
+      v-if="showRefPicker"
+      class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+      @click.self="showRefPicker = false"
+    >
+      <div class="flex max-h-[70vh] w-full max-w-md flex-col rounded-2xl border border-border bg-surface p-4 shadow-xl">
+        <h2 class="mb-2 text-sm font-semibold">Insert cross-reference</h2>
+        <input
+          v-model="refQuery"
+          placeholder="Search headings, figures, tables, notes…"
+          class="mb-2 w-full rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-accent-line"
+        />
+        <div class="flex-1 overflow-auto rounded-xl border border-border">
+          <button
+            v-for="ref in filteredRefs"
+            :key="ref.id"
+            class="flex w-full items-center gap-2 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-surface-2"
+            @click="insertReference(ref)"
+          >
+            <span class="shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+              {{ displayFor(ref) }}
+            </span>
+            <span class="min-w-0 flex-1 truncate text-ink-dim">{{ ref.label }}</span>
+          </button>
+          <p v-if="!filteredRefs.length" class="px-3 py-4 text-center text-xs text-ink-dim">
+            Nothing to reference yet — add a heading, figure caption, table caption, or footnote.
+          </p>
+        </div>
+        <button
+          class="mt-2 rounded-lg px-3 py-1.5 text-xs text-ink-dim hover:text-ink"
+          @click="showRefPicker = false"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+
+    <PromptDialog
+      :open="prompt.open"
+      :title="prompt.title"
+      :value="prompt.value"
+      :placeholder="prompt.placeholder"
+      :multiline="prompt.multiline"
+      :confirm-label="prompt.confirmLabel"
+      @submit="onPromptSubmit"
+      @cancel="onPromptCancel"
+    />
 
     <PrintPreview
       v-if="showPreview && loadedId !== null"

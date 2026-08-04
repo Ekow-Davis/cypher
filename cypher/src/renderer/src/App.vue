@@ -7,6 +7,7 @@ import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 import { usePreferencesStore } from '@/stores/preferences'
 import { installSync } from '@/lib/sync'
+import { applyScriptFont } from '@/lib/scriptFont'
 
 const route = useRoute()
 const appStore = useAppStore()
@@ -38,6 +39,7 @@ function snooze(): void {
 
 onMounted(async () => {
   installSync()
+  void applyScriptFont()
   void theme.load()
   void prefs.load()
   void appStore.init()

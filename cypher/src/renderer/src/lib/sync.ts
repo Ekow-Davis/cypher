@@ -6,6 +6,7 @@ import { useInsightsStore } from '@/stores/insights'
 import { useBooksStore } from '@/stores/books'
 import { useReaderStore } from '@/stores/reader'
 import { useDocumentsStore } from '@/stores/documents'
+import { applyScriptFont } from '@/lib/scriptFont'
 
 /**
  * Keeps windows in step. Main broadcasts which slice of data changed; this
@@ -50,6 +51,9 @@ export function installSync(): void {
           break
         case 'reader':
           await reader.load()
+          break
+        case 'fonts':
+          await applyScriptFont()
           break
         case 'docs':
           // A rename in a document window must reach the list in the other one.

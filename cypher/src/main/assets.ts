@@ -29,7 +29,14 @@ const MIME: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
-  '.gif': 'image/gif'
+  '.gif': 'image/gif',
+  // Fonts: served through the same protocol so the personal script can be
+  // swapped in at any time. A generic octet-stream type makes some engines
+  // refuse the @font-face, so these are declared explicitly.
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2'
 }
 
 /** Must run BEFORE app is ready. */

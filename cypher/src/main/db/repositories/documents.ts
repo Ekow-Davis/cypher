@@ -32,7 +32,7 @@ export function saveDocumentContent(id: number, content: string): Doc | null {
   return getDocument(id)
 }
 
-const META_FIELDS = ['header', 'footer'] as const
+const META_FIELDS = ['header', 'footer', 'header_align', 'footer_align'] as const
 
 export function updateDocumentMeta(id: number, patch: UpdateDocMetaInput): Doc | null {
   const entries = Object.entries(patch).filter(([k]) =>

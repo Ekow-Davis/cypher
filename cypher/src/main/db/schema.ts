@@ -310,3 +310,46 @@ export function migration013(db: Database): void {
     ALTER TABLE documents ADD COLUMN footer TEXT NOT NULL DEFAULT '';
   `)
 }
+
+/**
+ * Migration 014 — alignment for running headers and footers, plus comments.
+ * Comments are anchored to a mark in the document, so `anchor` holds the id the
+ * mark carries rather than a position that edits would invalidate.
+ */
+export function migration014(db: Database): void {
+  db.exec(`
+    ALTER TABLE documents ADD COLUMN header_align TEXT NOT NULL DEFAULT 'center';
+    ALTER TABLE documents ADD COLUMN footer_align TEXT NOT NULL DEFAULT 'center';
+    CREATE TABLE IF NOT EXISTS doc_comments (
+      id          INTEGER PRIMARY KEY,
+      document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+      anchor      TEXT    NOT NULL,
+      author      TEXT    NOT NULL DEFAULT '',
+      body        TEXT    NOT NULL DEFAULT '',
+      quote       TEXT,
+      resolved    INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_comments_doc ON doc_comments(document_id);
+  `)
+}
+
+/**
+ * Migration 015 — diary security. Verifier hashes never touch content and let
+ * "is this password right" be answered without decrypting anything. failed_at
+ * / fail_count drive the lockout; translated_until drives the 20-minute
+ * translation window described in the original spec.
+ */
+export function migration015(db: Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS diary_security (
+      id                  INTEGER PRIMARY KEY CHECK (id = 1),
+      entry_verifier      TEXT,
+      translate_verifier  TEXT,
+      wrapped_key         TEXT, -- the content key, encrypted with the entry password
+      fail_count          INTEGER NOT NULL DEFAULT 0,
+      locked_until        TEXT,
+      created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+}

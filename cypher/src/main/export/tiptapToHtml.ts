@@ -88,6 +88,12 @@ function renderNode(node: Node): string {
     case 'footnote':
       // numbering is filled in by collectFootnotes, which knows document order
       return '<sup class="footnote-ref" data-footnote="1"></sup>'
+    case 'caption': {
+      const label = `${node.attrs?.kind === 'table' ? 'Table' : 'Figure'} ${node.attrs?._n ?? ''}`.trim()
+      return `<p class="caption-block"><strong>${escapeHtml(label)}.</strong> ${renderNodes(node.content)}</p>`
+    }
+    case 'crossref':
+      return `<span class="crossref">${escapeHtml(String(node.attrs?._resolved ?? node.attrs?.display ?? '?'))}</span>`
     case 'toc': {
       const entries = (node.attrs?.entries ?? []) as {
         text: string
@@ -137,7 +143,15 @@ export function contentToHtml(stored: string): string {
 export interface Block {
   kind: 'paragraph' | 'heading' | 'quote' | 'bullet' | 'ordered' | 'code' | 'pagebreak'
   level?: number
-  runs: { text: string; bold?: boolean; italic?: boolean; strike?: boolean; code?: boolean }[]
+  runs: {
+    text: string
+    bold?: boolean
+    italic?: boolean
+    strike?: boolean
+    code?: boolean
+    /** Anchor id of a comment covering this run, if any. */
+    comment?: string
+  }[]
 }
 
 function runsOf(nodes: Node[] | undefined): Block['runs'] {
@@ -145,12 +159,18 @@ function runsOf(nodes: Node[] | undefined): Block['runs'] {
   const walk = (n: Node): void => {
     if (n.type === 'text') {
       const marks = new Set((n.marks ?? []).map((m) => m.type))
+      // Carry the comment id so the docx writer can wrap this run in a
+      // comment range; Word then shows it as a review comment.
+      const commentMark = (n.marks ?? []).find((m) => m.type === 'comment')
       runs.push({
         text: n.text ?? '',
         bold: marks.has('bold'),
         italic: marks.has('italic'),
         strike: marks.has('strike'),
-        code: marks.has('code')
+        code: marks.has('code'),
+        comment: commentMark?.attrs?.commentId
+          ? String(commentMark.attrs.commentId)
+          : undefined
       })
       return
     }
@@ -160,6 +180,10 @@ function runsOf(nodes: Node[] | undefined): Block['runs'] {
     }
     if (n.type === 'mention') {
       runs.push({ text: String(n.attrs?.label ?? '') })
+      return
+    }
+    if (n.type === 'crossref') {
+      runs.push({ text: String(n.attrs?._resolved ?? n.attrs?.display ?? '?') })
       return
     }
     if (n.type === 'footnote') {
@@ -217,6 +241,14 @@ export function contentToBlocks(stored: string): Block[] {
       case 'pageBreak':
         blocks.push({ kind: 'pagebreak', runs: [] })
         break
+      case 'caption': {
+        const label = `${node.attrs?.kind === 'table' ? 'Table' : 'Figure'} ${node.attrs?._n ?? ''}`.trim()
+        blocks.push({
+          kind: 'paragraph',
+          runs: [{ text: `${label}. `, bold: true }, ...runsOf(node.content)]
+        })
+        break
+      }
       case 'toc': {
         const entries = (node.attrs?.entries ?? []) as {
           text: string
@@ -263,7 +295,13 @@ export function collectFootnotes(stored: string): string[] {
   return notes
 }
 
-/** Fills the empty markers with their numbers and appends the notes list. */
+/**
+ * Fills the empty markers with their numbers and appends the notes.
+ *
+ * Chromium has no CSS footnote support, so printed notes gather at the end
+ * rather than per page. The editor and Word export both place them at page
+ * feet; this is the one surface that can't, and it says so with a heading.
+ */
 export function withFootnotes(html: string, notes: string[]): string {
   if (!notes.length) return html
   let i = 0
@@ -275,4 +313,61 @@ export function withFootnotes(html: string, notes: string[]): string {
     .map((t, idx) => `<div class="footnote-item"><sup>${idx + 1}</sup> ${escapeHtml(t)}</div>`)
     .join('')
   return `${numbered}<div class="footnotes"><div class="footnotes-title">Notes</div>${list}</div>`
+}
+
+/**
+ * Numbers every heading, figure caption, table caption, and footnote in
+ * document order, then resolves every cross-reference against those numbers —
+ * exactly what the editor's "Update refs" does, run once for export so the
+ * output always reflects the document's current state regardless of whether
+ * the author remembered to click Update.
+ */
+export function resolveReferences(stored: string): string {
+  if (!stored) return stored
+  let doc: any
+  try {
+    doc = JSON.parse(stored)
+  } catch {
+    return stored
+  }
+
+  const counters = [0, 0, 0, 0, 0, 0]
+  const kindCounts: Record<string, number> = { figure: 0, table: 0, footnote: 0 }
+  const numbers = new Map<string, string>()
+  const displays = new Map<string, string>()
+
+  const scan = (n: any): void => {
+    if (n.type === 'heading') {
+      const level = Math.min(6, Math.max(1, Number(n.attrs?.level ?? 1)))
+      counters[level - 1] += 1
+      for (let i = level; i < counters.length; i++) counters[i] = 0
+      const number = counters.slice(0, level).join('.')
+      if (n.attrs?.refId) {
+        numbers.set(n.attrs.refId, number)
+        displays.set(n.attrs.refId, `Section ${number}`)
+      }
+    } else if (n.type === 'caption') {
+      const kind = n.attrs?.kind === 'table' ? 'table' : 'figure'
+      kindCounts[kind] += 1
+      n.attrs._n = kindCounts[kind]
+      if (n.attrs?.captionId) {
+        displays.set(n.attrs.captionId, `${kind === 'table' ? 'Table' : 'Figure'} ${kindCounts[kind]}`)
+      }
+    } else if (n.type === 'footnote') {
+      kindCounts.footnote += 1
+      if (n.attrs?.refId) displays.set(n.attrs.refId, `Note ${kindCounts.footnote}`)
+    }
+    n.content?.forEach(scan)
+  }
+  scan(doc)
+
+  const apply = (n: any): void => {
+    if (n.type === 'crossref' && n.attrs) {
+      n.attrs._resolved = displays.get(n.attrs.targetId) ?? n.attrs.display ?? '(missing)'
+    }
+    n.content?.forEach(apply)
+  }
+  apply(doc)
+
+  return JSON.stringify(doc)
 }
