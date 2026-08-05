@@ -7,7 +7,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "sync-shared": "node sync-shared.mjs",
+    "prebuild": "node sync-shared.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

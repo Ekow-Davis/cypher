@@ -2,18 +2,19 @@
   "name": "cypher",
   "version": "0.1.0",
   "description": "A private encrypted journal and long-form writing studio.",
-  "author": "HouseOfD",
+  "author": "Baron",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "npm run typecheck && electron-vite build",
+    "build": "npm run sync:shared && npm run typecheck && electron-vite build",
     "preview": "electron-vite preview",
     "typecheck:node": "vue-tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "build:win": "npm run build && electron-builder --win",
     "build:unpack": "npm run build && electron-builder --dir",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "sync:shared": "node server/sync-shared.mjs"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.6.0",

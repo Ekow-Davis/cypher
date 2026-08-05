@@ -1,8 +1,8 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { pool, initSchema, isReadable, type ShareRow } from './db.js'
-import { renderReaderHtml } from '../../src/shared/readerHtml.js'
-import type { ShareSnapshot } from '../../src/shared/types.js'
+import { renderReaderHtml } from './shared/readerHtml.js'
+import type { ShareSnapshot } from './shared/types.js'
 
 const PUBLISH_KEY = process.env.PUBLISH_KEY ?? ''
 const PORT = Number(process.env.PORT ?? 8080)
