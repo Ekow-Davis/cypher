@@ -12,6 +12,7 @@ import {
   Minimize2,
   Download,
   ExternalLink,
+  Share2,
   PanelLeft
 } from 'lucide-vue-next'
 import { useBooksStore } from '@/stores/books'
@@ -29,6 +30,7 @@ import LoreView from './LoreView.vue'
 import CharacterView from './CharacterView.vue'
 import ExportDialog from './ExportDialog.vue'
 import SectionExportDialog from './SectionExportDialog.vue'
+import ShareDialog from './ShareDialog.vue'
 import OverflowMenu from '@/components/OverflowMenu.vue'
 import { useBreakpoint } from '@/lib/useBreakpoint'
 import type { Book } from '@shared/types'
@@ -50,6 +52,7 @@ const showInsights = ref(true)
 const showLoreSidebar = ref(true)
 const showExport = ref(false)
 const showSectionExport = ref<'lore' | 'characters' | null>(null)
+const showShare = ref(false)
 const windowNotice = ref<string | null>(null)
 const showChapters = ref(true)
 
@@ -189,6 +192,13 @@ onMounted(async () => {
             <Download :size="15" /> Export book…
           </button>
           <button
+            v-if="ui.tab === 'manuscript'"
+            class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink-dim hover:bg-surface-2 hover:text-ink"
+            @click="showShare = true"
+          >
+            <Share2 :size="15" /> Share…
+          </button>
+          <button
             v-if="ui.tab === 'lore'"
             class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink-dim hover:bg-surface-2 hover:text-ink"
             @click="showSectionExport = 'lore'"
@@ -223,7 +233,7 @@ onMounted(async () => {
     <div v-if="ui.tab === 'manuscript'" class="relative flex flex-1 overflow-hidden">
       <ChapterList
         v-if="!app.focusMode && showChapters"
-        :class="isTight ? 'absolute inset-y-0 left-0 z-30 shadow-2xl' : ''"
+        :class="isTight ? 'cypher-drawer absolute inset-y-0 left-0 z-30 shadow-2xl' : ''"
       />
       <main class="min-w-0 flex-1 overflow-hidden">
         <ChapterEditor v-if="chapters.active" :chapter="chapters.active" />
@@ -233,7 +243,7 @@ onMounted(async () => {
       </main>
       <InsightsSidebar
         v-if="showInsights && !app.focusMode"
-        :class="isTight ? 'absolute inset-y-0 right-0 z-30 shadow-2xl' : ''"
+        :class="isTight ? 'cypher-drawer absolute inset-y-0 right-0 z-30 shadow-2xl' : ''"
       />
     </div>
 
@@ -249,6 +259,8 @@ onMounted(async () => {
     >
       {{ windowNotice }}
     </div>
+
+    <ShareDialog v-if="showShare" :book-id="Number(route.params.id)" @close="showShare = false" />
 
     <SectionExportDialog
       v-if="showSectionExport"

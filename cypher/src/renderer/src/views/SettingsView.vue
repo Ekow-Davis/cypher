@@ -4,6 +4,7 @@ import { Check, Database, Palette, PenLine, ShieldCheck, Info } from 'lucide-vue
 import DataSafetyPanel from '@/components/DataSafetyPanel.vue'
 import ScriptFontPanel from '@/components/ScriptFontPanel.vue'
 import DiarySecurityPanel from '@/components/DiarySecurityPanel.vue'
+import ShareServerPanel from '@/components/ShareServerPanel.vue'
 import TrashPanel from '@/components/TrashPanel.vue'
 import { usePreferencesStore, type FocusWidth } from '@/stores/preferences'
 import { useAppStore } from '@/stores/app'
@@ -241,6 +242,7 @@ onMounted(async () => {
       <p v-else-if="dbError" class="text-sm text-red-400">Database error: {{ dbError }}</p>
       <p v-else class="text-sm text-ink-dim">Checking…</p>
     </div>
+    <ShareServerPanel v-show="section === 'data'" class="mt-6" />
     <DiarySecurityPanel v-show="section === 'data'" class="mt-6" />
     <DataSafetyPanel v-show="section === 'data'" class="mt-6" />
     <TrashPanel v-show="section === 'data'" class="mt-6" />

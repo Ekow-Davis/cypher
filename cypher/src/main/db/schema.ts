@@ -362,3 +362,21 @@ export function migration015(db: Database): void {
 export function migration016(db: Database): void {
   db.exec(`ALTER TABLE documents ADD COLUMN deleted_at TEXT;`)
 }
+
+/**
+ * Migration 017 — shareable links.
+ * `token` is the public identifier that appears in a URL; it is generated
+ * locally so a link can be created (and its snapshot exported) before any
+ * server exists. Engagement counters are mirrored back from the server rather
+ * than being authoritative here.
+ */
+export function migration017(db: Database): void {
+  db.exec(`
+    ALTER TABLE share_links ADD COLUMN token TEXT;
+    ALTER TABLE share_links ADD COLUMN label TEXT NOT NULL DEFAULT '';
+    ALTER TABLE share_links ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'));
+    ALTER TABLE share_links ADD COLUMN views INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE share_links ADD COLUMN read_seconds INTEGER NOT NULL DEFAULT 0;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_share_token ON share_links(token);
+  `)
+}

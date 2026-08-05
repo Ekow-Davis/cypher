@@ -23,6 +23,9 @@ import type {
   DocComment,
   CreateCommentInput,
   CreateEntryInput,
+  ShareLink,
+  CreateShareInput,
+  ShareScope,
   Diary,
   DiaryEntry,
   DiarySecurityStatus,
@@ -198,6 +201,36 @@ const cypher = {
       ipcRenderer.invoke('print:previewDocument', id),
     book: (bookId: number, options: ExportOptions): Promise<{ ok: boolean; reason?: string }> =>
       ipcRenderer.invoke('print:book', bookId, options)
+  },
+
+  share: {
+    list: (bookId: number): Promise<ShareLink[]> => ipcRenderer.invoke('share:list', bookId),
+    create: (input: CreateShareInput): Promise<ShareLink> =>
+      ipcRenderer.invoke('share:create', input),
+    update: (
+      id: number,
+      patch: { label?: string; scope?: ShareScope; expiresAt?: string | null }
+    ): Promise<ShareLink | null> => ipcRenderer.invoke('share:update', id, patch),
+    setActive: (id: number, active: boolean): Promise<ShareLink | null> =>
+      ipcRenderer.invoke('share:setActive', id, active),
+    setExpiry: (id: number, expiresAt: string | null): Promise<ShareLink | null> =>
+      ipcRenderer.invoke('share:setExpiry', id, expiresAt),
+    remove: (id: number): Promise<void> => ipcRenderer.invoke('share:delete', id),
+    exportFile: (
+      id: number
+    ): Promise<{ path: string | null; chapters: number; cancelled?: boolean; error?: string }> =>
+      ipcRenderer.invoke('share:exportFile', id),
+    publish: (id: number): Promise<{ ok: boolean; url?: string; error?: string }> =>
+      ipcRenderer.invoke('share:publish', id),
+    unpublish: (id: number): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('share:unpublish', id),
+    stats: (
+      id: number
+    ): Promise<{ views: number; readSeconds: number; active: boolean } | null> =>
+      ipcRenderer.invoke('share:stats', id),
+    url: (id: number): Promise<string | null> => ipcRenderer.invoke('share:url', id),
+    preview: (bookId: number, scope: ShareScope): Promise<number> =>
+      ipcRenderer.invoke('share:preview', bookId, scope)
   },
 
   trash: {

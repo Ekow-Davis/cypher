@@ -136,6 +136,22 @@ import {
   absoluteAssetPath
 } from './assets'
 import { exportBook, exportSection } from './export'
+import {
+  listShares,
+  createShare,
+  updateShare,
+  setShareActive,
+  setShareExpiry,
+  deleteShare
+} from './db/repositories/shares'
+import {
+  exportShareFile,
+  previewShareSize,
+  publishShare,
+  unpublishShare,
+  fetchShareStats,
+  shareUrl
+} from './share'
 import { printHtml, previewHtml } from './print'
 import { importDocx } from './docx'
 import { exportDocumentAs } from './export/exportDocument'
@@ -178,6 +194,8 @@ import type {
   UpdateDocMetaInput,
   CreateCommentInput,
   CreateEntryInput,
+  CreateShareInput,
+  ShareScope,
   TrashKind,
   UpdateChapterMetaInput,
   ExportFormat,
@@ -462,6 +480,31 @@ export function registerIpcHandlers(): void {
     if (!data.chapters.length) return { ok: false, reason: 'No chapters selected.' }
     return printHtml(bookToHtml(data, options))
   })
+
+  // Sharing — book content only; there is no path here that can reach the diary.
+  handle('share:list', (_e, bookId: number) => listShares(bookId))
+  handle('share:create', (_e, input: CreateShareInput) => createShare(input))
+  handle(
+    'share:update',
+    (
+      _e,
+      id: number,
+      patch: { label?: string; scope?: ShareScope; expiresAt?: string | null }
+    ) => updateShare(id, patch)
+  )
+  handle('share:setActive', (_e, id: number, active: boolean) => setShareActive(id, active))
+  handle('share:setExpiry', (_e, id: number, expiresAt: string | null) =>
+    setShareExpiry(id, expiresAt)
+  )
+  handle('share:delete', (_e, id: number) => deleteShare(id))
+  handle('share:exportFile', (_e, id: number) => exportShareFile(id))
+  handle('share:publish', (_e, id: number) => publishShare(id))
+  handle('share:unpublish', (_e, id: number) => unpublishShare(id))
+  handle('share:stats', (_e, id: number) => fetchShareStats(id))
+  handle('share:url', (_e, id: number) => shareUrl(id))
+  handle('share:preview', (_e, bookId: number, scope: ShareScope) =>
+    previewShareSize(bookId, scope)
+  )
 
   // Trash
   handle('trash:list', () => listTrash())

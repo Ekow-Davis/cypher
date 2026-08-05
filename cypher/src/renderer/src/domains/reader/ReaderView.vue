@@ -128,7 +128,7 @@ async function copyPath(): Promise<void> {
       <aside
         v-if="showDetails"
         class="w-72 shrink-0 space-y-4 overflow-auto border-l border-border bg-surface p-4"
-        :class="isTight ? 'absolute inset-y-0 right-0 z-30 shadow-2xl' : ''"
+        :class="isTight ? 'cypher-drawer absolute inset-y-0 right-0 z-30 shadow-2xl' : ''"
       >
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold uppercase tracking-wider text-ink-dim">Details</span>

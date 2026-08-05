@@ -546,3 +546,16 @@ body {
   cursor: pointer;
   border-bottom: 1px dotted #2563eb;
 }
+
+/* ---------- Overlay drawers ----------
+   Side panels are translucent while they sit inline as columns, which reads
+   nicely against the page. Once the window narrows they float *over* the
+   content instead, and that same translucency lets the text underneath bleed
+   through. This forces them opaque only in that state.
+
+   Declared unlayered so it beats Tailwind's `bg-surface/60` utility, which
+   lives in @layer utilities — class order in the template would not decide it. */
+.cypher-drawer {
+  background: var(--color-surface);
+  backdrop-filter: none;
+}

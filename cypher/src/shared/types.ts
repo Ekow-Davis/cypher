@@ -332,3 +332,49 @@ export interface CreateEntryInput {
   title: string
   content: string
 }
+
+export interface ShareScope {
+  /** Empty means the whole book. */
+  chapterIds: number[]
+  includeCover: boolean
+  includeSynopsis: boolean
+}
+
+export interface ShareLink {
+  id: number
+  book_id: number
+  token: string | null
+  label: string
+  scope_json: string
+  expires_at: string | null
+  active: number
+  created_at: string
+  last_published_at: string | null
+  views: number
+  read_seconds: number
+}
+
+export interface CreateShareInput {
+  bookId: number
+  label: string
+  scope: ShareScope
+  expiresAt: string | null
+}
+
+/** The frozen payload a reader receives — books only, never diary content. */
+export interface ShareSnapshot {
+  title: string
+  subtitle: string | null
+  author: string | null
+  language: string
+  coverDataUri: string | null
+  builtAt: string
+  chapters: {
+    id: number
+    title: string
+    volume: string | null
+    synopsis: string | null
+    html: string
+    words: number
+  }[]
+}

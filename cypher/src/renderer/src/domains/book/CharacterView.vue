@@ -15,8 +15,10 @@ import { useCharactersStore } from '@/stores/characters'
 import { assetUrl } from '@/lib/assets'
 import CharacterSheet from './CharacterSheet.vue'
 import CharacterSearch from './CharacterSearch.vue'
+import { useBreakpoint } from '@/lib/useBreakpoint'
 
 const store = useCharactersStore()
+const { isTight } = useBreakpoint()
 const collapsed = reactive<Record<string, boolean>>({})
 const searching = ref(false)
 
@@ -55,9 +57,12 @@ async function confirmNewFolder(): Promise<void> {
       </button>
     </div>
 
-    <div class="flex flex-1 overflow-hidden">
+    <div class="relative flex flex-1 overflow-hidden">
       <!-- cast list -->
-      <aside class="flex w-64 shrink-0 flex-col border-r border-border bg-surface/60">
+      <aside
+        class="flex w-64 shrink-0 flex-col border-r border-border bg-surface/60"
+        :class="isTight ? 'cypher-drawer absolute inset-y-0 left-0 z-30 shadow-2xl' : ''"
+      >
         <div class="flex items-center justify-between border-b border-border px-4 py-3">
           <span class="text-xs font-semibold uppercase tracking-wider text-ink-dim">Cast</span>
           <div class="flex items-center gap-1">

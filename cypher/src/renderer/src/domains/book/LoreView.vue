@@ -166,7 +166,7 @@ async function confirmNewCategory(): Promise<void> {
       <!-- right sidebar -->
       <LoreSidebar
         v-if="showSidebar"
-        :class="isTight ? 'absolute inset-y-0 right-0 z-30 shadow-2xl' : ''"
+        :class="isTight ? 'cypher-drawer absolute inset-y-0 right-0 z-30 shadow-2xl' : ''"
       />
     </div>
   </div>
