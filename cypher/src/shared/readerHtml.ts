@@ -1,4 +1,5 @@
 import type { ShareSnapshot } from './types'
+import { faviconDataUri } from './brandMark.js'
 
 /**
  * Local copy so this module stays dependency-free: it is imported by the
@@ -33,6 +34,7 @@ export function renderReaderHtml(snapshot: ShareSnapshot, options?: { token?: st
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>${escapeHtml(snapshot.title)}</title>
+<link rel="icon" href="${faviconDataUri()}"/>
 <style>
 :root {
   --bg: #f6f3ec; --fg: #1e1b16; --dim: #6b6459; --line: #ddd6c8; --panel: #fffdf8;

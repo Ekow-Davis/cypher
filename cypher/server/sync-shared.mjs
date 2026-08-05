@@ -15,10 +15,10 @@ const localShared = join(here, 'src', 'shared')
 // Only sync when the repo copy is reachable (i.e. a full local checkout).
 if (existsSync(repoShared)) {
   mkdirSync(localShared, { recursive: true })
-  for (const file of ['readerHtml.ts', 'types.ts']) {
+  for (const file of ['readerHtml.ts', 'types.ts', 'brandMark.ts']) {
     copyFileSync(join(repoShared, file), join(localShared, file))
   }
-  console.log('[sync-shared] refreshed readerHtml.ts, types.ts')
+  console.log('[sync-shared] refreshed readerHtml.ts, types.ts, brandMark.ts')
 } else {
   console.log('[sync-shared] repo src/shared not present — using committed copies')
 }

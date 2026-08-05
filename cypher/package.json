@@ -2,7 +2,7 @@
   "name": "cypher",
   "version": "0.1.0",
   "description": "A private encrypted journal and long-form writing studio.",
-  "author": "Baron",
+  "author": "HouseOfD",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

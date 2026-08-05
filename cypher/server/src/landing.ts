@@ -7,6 +7,8 @@
  * and no cross-origin hop between the page and the API.
  */
 
+import { faviconDataUri, brandSvg } from './shared/brandMark.js'
+
 const ACCENT = '#a78bfa'
 
 export interface LandingOptions {
@@ -34,15 +36,6 @@ const FEATURES: { title: string; body: string }[] = [
   }
 ]
 
-function icon(): string {
-  // A nod to the app mark: a rounded C whose top-right corner folds like paper.
-  return `<svg viewBox="0 0 64 64" width="44" height="44" fill="none" aria-hidden="true">
-    <path d="M42 14H24a10 10 0 0 0-10 10v16a10 10 0 0 0 10 10h14a10 10 0 0 0 10-10"
-          stroke="${ACCENT}" stroke-width="6" stroke-linecap="round"/>
-    <path d="M42 14l12 12H42z" fill="${ACCENT}"/>
-  </svg>`
-}
-
 export function renderLandingPage(options: LandingOptions = {}): string {
   const download = options.downloadUrl ?? ''
   const version = options.version ?? ''
@@ -65,6 +58,7 @@ export function renderLandingPage(options: LandingOptions = {}): string {
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Cypher — write privately, share deliberately</title>
+<link rel="icon" href="${faviconDataUri()}"/>
 <meta name="description" content="A local-first desktop app for writing books, documents and a private encrypted diary."/>
 <style>
 :root { --bg:#0f0d14; --panel:#17141f; --line:#272134; --ink:#ece9f3; --dim:#9d95ad; --accent:${ACCENT}; }
@@ -100,7 +94,7 @@ footer { border-top:1px solid var(--line); padding:2rem 0 3rem; color:var(--dim)
 </style>
 </head>
 <body>
-<header><div class="wrap brand">${icon()} Cypher</div></header>
+<header><div class="wrap brand">${brandSvg(40)} Cypher</div></header>
 
 <div class="wrap">
   <div class="hero">

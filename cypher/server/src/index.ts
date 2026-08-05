@@ -4,6 +4,7 @@ import { pool, initSchema, isReadable, type ShareRow } from './db.js'
 import { renderReaderHtml } from './shared/readerHtml.js'
 import type { ShareSnapshot } from './shared/types.js'
 import { renderLandingPage } from './landing.js'
+import { BRAND_SVG } from './shared/brandMark.js'
 
 const PUBLISH_KEY = process.env.PUBLISH_KEY ?? ''
 const PORT = Number(process.env.PORT ?? 8080)
@@ -48,6 +49,17 @@ function authorised(header: string | undefined): boolean {
 await initSchema()
 
 app.get('/health', async () => ({ ok: true }))
+
+/**
+ * Browsers request this regardless of the inline <link rel="icon">, so serving
+ * it stops a 404 appearing in the logs on every visit.
+ */
+app.get('/favicon.ico', async (_request, reply) =>
+  reply
+    .type('image/svg+xml')
+    .header('Cache-Control', 'public, max-age=86400')
+    .send(BRAND_SVG)
+)
 
 /** The public site. Same origin as the reader, so share links stay on one domain. */
 app.get('/', async (_request, reply) =>
