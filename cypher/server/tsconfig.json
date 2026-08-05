@@ -11,5 +11,8 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": false
   },
-  "include": ["src/**/*.ts", "../src/shared/readerHtml.ts", "../src/shared/types.ts"]
+  "include": [
+      "src/**/*.ts",
+      "../src/shared/**/*.ts"
+    ]
 }
