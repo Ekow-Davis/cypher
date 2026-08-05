@@ -3,9 +3,34 @@ import cors from '@fastify/cors'
 import { pool, initSchema, isReadable, type ShareRow } from './db.js'
 import { renderReaderHtml } from './shared/readerHtml.js'
 import type { ShareSnapshot } from './shared/types.js'
+import { renderLandingPage } from './landing.js'
 
 const PUBLISH_KEY = process.env.PUBLISH_KEY ?? ''
 const PORT = Number(process.env.PORT ?? 8080)
+
+/**
+ * Fail loudly and specifically on a misconfigured deploy.
+ *
+ * Without this the first symptom is a connection error from the Postgres
+ * driver, which says nothing about the variable that is actually missing —
+ * and that is the hardest kind of deployment problem to diagnose.
+ */
+if (!process.env.DATABASE_URL) {
+  console.error(
+    '[cypher] DATABASE_URL is not set.\n' +
+      '  On Railway: open this service → Variables → add a reference to your\n' +
+      '  Postgres service (${{Postgres.DATABASE_URL}}).'
+  )
+  process.exit(1)
+}
+if (!PUBLISH_KEY) {
+  console.error(
+    '[cypher] PUBLISH_KEY is not set — publishing would be impossible.\n' +
+      '  Generate one and add it under Variables, then paste the same value\n' +
+      '  into the app under Settings → Data → Share server.'
+  )
+  process.exit(1)
+}
 
 const app = Fastify({ logger: true, bodyLimit: 25 * 1024 * 1024 })
 await app.register(cors, { origin: true })
@@ -23,6 +48,19 @@ function authorised(header: string | undefined): boolean {
 await initSchema()
 
 app.get('/health', async () => ({ ok: true }))
+
+/** The public site. Same origin as the reader, so share links stay on one domain. */
+app.get('/', async (_request, reply) =>
+  reply.type('text/html').send(
+    renderLandingPage({
+      downloadUrl: process.env.DOWNLOAD_URL,
+      version: process.env.APP_VERSION
+    })
+  )
+)
+
+/** Someone trimming a share URL back to /s/ should land somewhere useful. */
+app.get('/s', async (_request, reply) => reply.redirect('/'))
 
 /** Create or refresh a share. The same token overwrites in place. */
 app.put<{
@@ -120,16 +158,20 @@ function shell(title: string, message: string): string {
 <meta name="viewport" content="width=device-width,initial-scale=1"/><title>${title}</title>
 <style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
 background:#15131a;color:#e7e3ee;font-family:system-ui,sans-serif;text-align:center;padding:2rem}
-h1{font-size:1.3rem;margin:0 0 .5rem}p{color:#9a93a8;margin:0;font-size:.9rem}</style></head>
+h1{font-size:1.3rem;margin:0 0 .5rem}p{color:#9a93a8;margin:0;font-size:.9rem}
+a{color:#a78bfa}</style></head>
 <body><div><h1>${title}</h1><p>${message}</p></div></body></html>`
 }
 function notFoundPage(): string {
-  return shell('Nothing here', 'This link does not exist, or it was deleted by its author.')
+  return shell(
+    'Nothing here',
+    'This link does not exist, or it was deleted by its author. <a href="/">About Cypher</a>'
+  )
 }
 function gonePage(hadExpiry: boolean): string {
   return shell(
     hadExpiry ? 'This link has expired' : 'This link was revoked',
-    'Ask the author for a new one.'
+    'Ask the author for a new one. <a href="/">About Cypher</a>'
   )
 }
 
