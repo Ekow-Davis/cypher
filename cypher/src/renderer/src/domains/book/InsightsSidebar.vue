@@ -11,7 +11,8 @@ import {
   Trash2,
   Sparkles,
   Check,
-  X
+  X,
+  ListOrdered
 } from 'lucide-vue-next'
 import { useChaptersStore } from '@/stores/chapters'
 import { useInsightsStore } from '@/stores/insights'
@@ -21,6 +22,52 @@ import { extractPlainText, wordFrequency, phraseFrequency, type FreqItem } from 
 
 const chaptersStore = useChaptersStore()
 const insights = useInsightsStore()
+
+/**
+ * Per-chapter breakdown.
+ *
+ * Bars are scaled against the longest chapter rather than an absolute target,
+ * so the shape of the manuscript is visible at a glance — which chapters are
+ * thin, which have run away — regardless of whether the book is 20k or 200k.
+ */
+const STATUS_TONE: Record<string, string> = {
+  outline: 'bg-slate-400',
+  draft: 'bg-amber-400',
+  revised: 'bg-sky-400',
+  final: 'bg-emerald-400'
+}
+
+const chapterRows = computed(() => {
+  const list = [...chaptersStore.chapters].sort((a, b) => a.sort_order - b.sort_order)
+  const longest = Math.max(1, ...list.map((c) => c.word_count))
+  const volumeName = (id: number | null): string | null =>
+    id == null ? null : (chaptersStore.volumes.find((v) => v.id === id)?.title ?? null)
+
+  return list.map((chapter, index) => ({
+    id: chapter.id,
+    number: index + 1,
+    title: chapter.title,
+    words: chapter.word_count,
+    status: chapter.status,
+    volume: volumeName(chapter.volume_id),
+    percent: Math.round((chapter.word_count / longest) * 100),
+    minutes: Math.max(1, Math.round(chapter.word_count / 200))
+  }))
+})
+
+const statusTotals = computed(() => {
+  const totals: Record<string, number> = { outline: 0, draft: 0, revised: 0, final: 0 }
+  for (const chapter of chaptersStore.chapters) {
+    if (chapter.status in totals) totals[chapter.status] += 1
+  }
+  return totals
+})
+
+const averageWords = computed(() => {
+  const list = chaptersStore.chapters
+  if (!list.length) return 0
+  return Math.round(list.reduce((sum, c) => sum + c.word_count, 0) / list.length)
+})
 
 // ----- live book stats -----
 const totalWords = computed(() =>
@@ -45,7 +92,14 @@ onBeforeUnmount(() => {
 })
 
 // ----- collapsible cards -----
-const open = reactive({ progress: true, goal: true, today: true, mood: true, freq: false })
+const open = reactive({
+  progress: true,
+  goal: true,
+  chapters: true,
+  today: true,
+  mood: true,
+  freq: false
+})
 
 // ----- goal -----
 const editingGoal = ref(false)
@@ -162,6 +216,67 @@ function analyze(): void {
               <div class="text-[10px] text-ink-dim">read</div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- CHAPTERS -->
+      <section class="rounded-xl border border-border bg-surface">
+        <button
+          class="flex w-full items-center gap-2 px-3 py-2 text-sm font-semibold"
+          @click="open.chapters = !open.chapters"
+        >
+          <ListOrdered :size="15" class="text-accent" />
+          Chapters
+          <component
+            :is="open.chapters ? ChevronDown : ChevronRight"
+            :size="14"
+            class="ml-auto text-ink-dim"
+          />
+        </button>
+
+        <div v-if="open.chapters" class="px-3 pb-3">
+          <p v-if="!chapterRows.length" class="py-2 text-xs text-ink-dim">No chapters yet.</p>
+
+          <template v-else>
+            <div class="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-ink-dim">
+              <span>avg {{ averageWords.toLocaleString() }} words</span>
+              <span v-if="statusTotals.final">{{ statusTotals.final }} final</span>
+              <span v-if="statusTotals.revised">{{ statusTotals.revised }} revised</span>
+              <span v-if="statusTotals.draft">{{ statusTotals.draft }} draft</span>
+              <span v-if="statusTotals.outline">{{ statusTotals.outline }} outline</span>
+            </div>
+
+            <div class="max-h-64 space-y-1.5 overflow-auto pr-1">
+              <button
+                v-for="row in chapterRows"
+                :key="row.id"
+                class="block w-full rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-surface-2"
+                :class="chaptersStore.activeId === row.id ? 'bg-surface-2' : ''"
+                :title="`${row.words.toLocaleString()} words · about ${row.minutes} min to read`"
+                @click="chaptersStore.setActive(row.id)"
+              >
+                <span class="flex items-baseline gap-1.5">
+                  <span class="shrink-0 text-[10px] tabular-nums text-ink-dim">{{ row.number }}</span>
+                  <span class="min-w-0 flex-1 truncate text-xs">{{ row.title }}</span>
+                  <span class="shrink-0 text-[10px] tabular-nums text-ink-dim">
+                    {{ row.words.toLocaleString() }}
+                  </span>
+                </span>
+                <span class="mt-1 flex items-center gap-1.5">
+                  <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                    <span
+                      class="block h-full rounded-full transition-all"
+                      :class="STATUS_TONE[row.status] ?? 'bg-slate-400'"
+                      :style="{ width: Math.max(2, row.percent) + '%' }"
+                    />
+                  </span>
+                  <span v-if="row.volume" class="shrink-0 truncate text-[9px] text-ink-dim">
+                    {{ row.volume }}
+                  </span>
+                </span>
+              </button>
+            </div>
+          </template>
         </div>
       </section>
 

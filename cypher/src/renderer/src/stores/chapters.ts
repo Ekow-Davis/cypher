@@ -4,8 +4,7 @@ import type {
   Chapter,
   Volume,
   ChapterPlacement,
-  UpdateChapterMetaInput
-} from '@shared/types'
+  UpdateChapterMetaInput, SplitChapterInput } from '@shared/types'
 
 export const useChaptersStore = defineStore('chapters', () => {
   const chapters = ref<Chapter[]>([])
@@ -49,6 +48,20 @@ export const useChaptersStore = defineStore('chapters', () => {
   async function saveMeta(id: number, patch: UpdateChapterMetaInput): Promise<void> {
     const updated = await window.cypher.chapters.saveMeta(id, patch)
     if (updated) replaceChapter(updated)
+  }
+
+  /**
+   * Splits a chapter, then makes the new half active so the writer lands where
+   * they were looking — the split is almost always followed by editing it.
+   */
+  async function split(input: SplitChapterInput): Promise<number | null> {
+    const before = new Set(chapters.value.map((c) => c.id))
+    const updated = await window.cypher.chapters.split(input)
+    if (!updated) return null
+    chapters.value = updated
+    const created = updated.find((c) => !before.has(c.id))
+    if (created) activeId.value = created.id
+    return created?.id ?? null
   }
 
   async function remove(id: number): Promise<void> {
@@ -167,6 +180,7 @@ export const useChaptersStore = defineStore('chapters', () => {
     rename,
     saveContent,
     saveMeta,
+    split,
     remove,
     applyOrder,
     setActive,

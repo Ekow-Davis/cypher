@@ -12,6 +12,8 @@ import {
 } from './db/repositories/books'
 import {
   listChapters,
+  splitChapter,
+  importChapters,
   getChapter,
   createChapter,
   ensureFirstChapter,
@@ -41,6 +43,17 @@ import {
   deleteDocument
 } from './db/repositories/documents'
 import { toPrintTemplate, hasRunningText } from './runningText'
+import {
+  customWords,
+  addCustomWord,
+  removeCustomWord,
+  spellcheckLanguages,
+  setSpellcheckLanguages,
+  setSpellcheckEnabled,
+  isSpellcheckEnabled
+} from './contextMenu'
+import { lookupWord, thesaurusEnabled } from './thesaurus'
+import { importManuscript } from './import/importManuscript'
 import {
   importScriptFont,
   getScriptFont,
@@ -198,6 +211,8 @@ import type {
   ShareScope,
   TrashKind,
   UpdateChapterMetaInput,
+  SplitChapterInput,
+  ImportedChapterInput,
   ExportFormat,
   ExportOptions,
   SectionKind,
@@ -275,6 +290,13 @@ export function registerIpcHandlers(): void {
     updateChapterMeta(id, patch)
   )
   handle('chapters:applyOrder', (_e, items: ChapterPlacement[]) => applyChapterOrder(items))
+  handle('chapters:importPick', () => importManuscript())
+  handle(
+    'chapters:importApply',
+    (_e, bookId: number, items: ImportedChapterInput[], volumeId: number | null) =>
+      importChapters(bookId, items, volumeId)
+  )
+  handle('chapters:split', (_e, input: SplitChapterInput) => splitChapter(input))
   handle('chapters:delete', (_e, id: number) => deleteChapter(id))
 
   // Volumes
@@ -575,6 +597,19 @@ export function registerIpcHandlers(): void {
   )
   handle('diary:deleteEntry', (_e, id: number) => deleteEntry(id))
   handle('diary:monthGroups', (_e, diaryId: number | null) => listMonthGroups(diaryId))
+
+  // Spelling — Chromium's dictionaries, shared by every editor in the app
+  handle('spell:enabled', () => isSpellcheckEnabled())
+  handle('spell:setEnabled', (_e, enabled: boolean) => setSpellcheckEnabled(enabled))
+  handle('spell:languages', () => spellcheckLanguages())
+  handle('spell:setLanguages', (_e, languages: string[]) => setSpellcheckLanguages(languages))
+  handle('spell:words', () => customWords())
+  handle('spell:addWord', (_e, word: string) => addCustomWord(word))
+  handle('spell:removeWord', (_e, word: string) => removeCustomWord(word))
+
+  // Thesaurus
+  handle('thesaurus:lookup', (_e, word: string) => lookupWord(word))
+  handle('thesaurus:enabled', () => thesaurusEnabled())
 
   // Script font (diary "translation")
   handle('fonts:import', () => importScriptFont())

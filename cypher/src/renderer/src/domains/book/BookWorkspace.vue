@@ -13,6 +13,7 @@ import {
   Download,
   ExternalLink,
   Share2,
+  FileInput,
   PanelLeft
 } from 'lucide-vue-next'
 import { useBooksStore } from '@/stores/books'
@@ -31,6 +32,7 @@ import CharacterView from './CharacterView.vue'
 import ExportDialog from './ExportDialog.vue'
 import SectionExportDialog from './SectionExportDialog.vue'
 import ShareDialog from './ShareDialog.vue'
+import ImportChaptersDialog from './ImportChaptersDialog.vue'
 import OverflowMenu from '@/components/OverflowMenu.vue'
 import { useBreakpoint } from '@/lib/useBreakpoint'
 import type { Book } from '@shared/types'
@@ -53,6 +55,7 @@ const showLoreSidebar = ref(true)
 const showExport = ref(false)
 const showSectionExport = ref<'lore' | 'characters' | null>(null)
 const showShare = ref(false)
+const showImport = ref(false)
 const windowNotice = ref<string | null>(null)
 const showChapters = ref(true)
 
@@ -199,6 +202,13 @@ onMounted(async () => {
             <Share2 :size="15" /> Share…
           </button>
           <button
+            v-if="ui.tab === 'manuscript'"
+            class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink-dim hover:bg-surface-2 hover:text-ink"
+            @click="showImport = true"
+          >
+            <FileInput :size="15" /> Import chapters…
+          </button>
+          <button
             v-if="ui.tab === 'lore'"
             class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink-dim hover:bg-surface-2 hover:text-ink"
             @click="showSectionExport = 'lore'"
@@ -259,6 +269,12 @@ onMounted(async () => {
     >
       {{ windowNotice }}
     </div>
+
+    <ImportChaptersDialog
+      v-if="showImport"
+      :book-id="Number(route.params.id)"
+      @close="showImport = false"
+    />
 
     <ShareDialog v-if="showShare" :book-id="Number(route.params.id)" @close="showShare = false" />
 

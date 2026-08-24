@@ -9,6 +9,7 @@ import { usePreferencesStore } from '@/stores/preferences'
 import { installSync } from '@/lib/sync'
 import { applyScriptFont } from '@/lib/scriptFont'
 import { useFontsStore } from '@/stores/fonts'
+import ThesaurusPopup from '@/components/ThesaurusPopup.vue'
 
 const route = useRoute()
 const appStore = useAppStore()
@@ -92,4 +93,5 @@ onMounted(async () => {
       </main>
     </div>
   </div>
+  <ThesaurusPopup />
 </template>

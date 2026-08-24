@@ -7,6 +7,9 @@ import type {
   CreateChapterOptions,
   ChapterPlacement,
   UpdateChapterMetaInput,
+  SplitChapterInput,
+  ImportedChapterInput,
+  ManuscriptImport,
   Volume,
   Goal,
   Checkin,
@@ -100,6 +103,16 @@ const cypher = {
       ipcRenderer.invoke('chapters:saveMeta', id, patch),
     applyOrder: (items: ChapterPlacement[]): Promise<void> =>
       ipcRenderer.invoke('chapters:applyOrder', items),
+    importPick: (): Promise<ManuscriptImport | null> =>
+      ipcRenderer.invoke('chapters:importPick'),
+    importApply: (
+      bookId: number,
+      items: ImportedChapterInput[],
+      volumeId: number | null
+    ): Promise<Chapter[]> =>
+      ipcRenderer.invoke('chapters:importApply', bookId, items, volumeId),
+    split: (input: SplitChapterInput): Promise<Chapter[] | null> =>
+      ipcRenderer.invoke('chapters:split', input),
     remove: (id: number): Promise<void> => ipcRenderer.invoke('chapters:delete', id)
   },
 
@@ -323,6 +336,45 @@ const cypher = {
     deleteEntry: (id: number): Promise<void> => ipcRenderer.invoke('diary:deleteEntry', id),
     monthGroups: (diaryId: number | null): Promise<{ month: string; count: number }[]> =>
       ipcRenderer.invoke('diary:monthGroups', diaryId)
+  },
+
+  spell: {
+    enabled: (): Promise<boolean> => ipcRenderer.invoke('spell:enabled'),
+    setEnabled: (enabled: boolean): Promise<void> =>
+      ipcRenderer.invoke('spell:setEnabled', enabled),
+    languages: (): Promise<{ current: string[]; available: string[] }> =>
+      ipcRenderer.invoke('spell:languages'),
+    setLanguages: (languages: string[]): Promise<void> =>
+      ipcRenderer.invoke('spell:setLanguages', languages),
+    words: (): Promise<string[]> => ipcRenderer.invoke('spell:words'),
+    addWord: (word: string): Promise<boolean> => ipcRenderer.invoke('spell:addWord', word),
+    removeWord: (word: string): Promise<boolean> => ipcRenderer.invoke('spell:removeWord', word)
+  },
+
+  thesaurus: {
+    lookup: (
+      word: string
+    ): Promise<{ word: string; synonyms: string[]; antonyms: string[]; error?: string }> =>
+      ipcRenderer.invoke('thesaurus:lookup', word),
+    enabled: (): Promise<boolean> => ipcRenderer.invoke('thesaurus:enabled'),
+    /** Fired when the writer picks "Synonyms for…" from the right-click menu. */
+    onLookup: (cb: (word: string) => void): (() => void) => {
+      const listener = (_e: unknown, word: string): void => cb(word)
+      ipcRenderer.on('thesaurus:lookup', listener)
+      return () => ipcRenderer.removeListener('thesaurus:lookup', listener)
+    }
+  },
+
+  updates: {
+    check: (): Promise<unknown> => ipcRenderer.invoke('update:check'),
+    download: (): Promise<unknown> => ipcRenderer.invoke('update:download'),
+    install: (): Promise<void> => ipcRenderer.invoke('update:install'),
+    state: (): Promise<unknown> => ipcRenderer.invoke('update:state'),
+    onState: (cb: (state: unknown) => void): (() => void) => {
+      const listener = (_e: unknown, value: unknown): void => cb(value)
+      ipcRenderer.on('update:state', listener)
+      return () => ipcRenderer.removeListener('update:state', listener)
+    }
   },
 
   fonts: {

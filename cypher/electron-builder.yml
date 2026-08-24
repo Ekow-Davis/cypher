@@ -26,7 +26,17 @@ win:
     - target: portable
       arch: [x64]
 
+# Where the app looks for updates. electron-builder writes latest.yml and a
+# .blockmap next to the installer; electron-updater uses the blockmap to fetch
+# only the changed blocks, so an update is a few MB rather than the whole exe.
+publish:
+  provider: github
+  owner: REPLACE_WITH_YOUR_GITHUB_USERNAME
+  repo: cypher
+
 nsis:
+  # Required for differential updates to work at all.
+  differentialPackage: true
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
   installerHeaderIcon: build/icon.ico

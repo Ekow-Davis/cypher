@@ -5,6 +5,8 @@ import DataSafetyPanel from '@/components/DataSafetyPanel.vue'
 import ScriptFontPanel from '@/components/ScriptFontPanel.vue'
 import DiarySecurityPanel from '@/components/DiarySecurityPanel.vue'
 import ShareServerPanel from '@/components/ShareServerPanel.vue'
+import UpdatePanel from '@/components/UpdatePanel.vue'
+import WritingAidsPanel from '@/components/WritingAidsPanel.vue'
 import TrashPanel from '@/components/TrashPanel.vue'
 import { usePreferencesStore, type FocusWidth } from '@/stores/preferences'
 import { useAppStore } from '@/stores/app'
@@ -242,12 +244,14 @@ onMounted(async () => {
       <p v-else-if="dbError" class="text-sm text-red-400">Database error: {{ dbError }}</p>
       <p v-else class="text-sm text-ink-dim">Checking…</p>
     </div>
+    <UpdatePanel v-show="section === 'data'" class="mt-6" />
     <ShareServerPanel v-show="section === 'data'" class="mt-6" />
     <DiarySecurityPanel v-show="section === 'data'" class="mt-6" />
     <DataSafetyPanel v-show="section === 'data'" class="mt-6" />
     <TrashPanel v-show="section === 'data'" class="mt-6" />
 
     <!-- WRITING -->
+    <WritingAidsPanel v-show="section === 'writing'" class="mb-6" />
     <div v-show="section === 'writing'" class="rounded-2xl border border-border bg-surface p-6">
       <div class="mb-1 flex items-center gap-2">
         <PenLine :size="18" class="text-accent" />

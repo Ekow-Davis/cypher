@@ -1,5 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import { registerIpcHandlers } from './ipc'
+import { initUpdater, checkOnStartup } from './updater'
+import { initSpellcheck } from './contextMenu'
 import { initDatabase, closeDatabase } from './db'
 import { startBackupScheduler, stopBackupScheduler } from './backup'
 import { purgeExpiredTrash } from './db/repositories/trash'
@@ -13,6 +15,8 @@ app.whenReady().then(() => {
   initDatabase()
   registerAssetProtocol()
   registerIpcHandlers()
+  initSpellcheck()
+  initUpdater()
   startBackupScheduler()
   try {
     const purged = purgeExpiredTrash()
@@ -21,6 +25,7 @@ app.whenReady().then(() => {
     console.error('[trash] purge failed:', e)
   }
   createWindow('/')
+  checkOnStartup()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow('/')

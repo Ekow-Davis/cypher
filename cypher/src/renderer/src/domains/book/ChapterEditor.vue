@@ -17,8 +17,7 @@ import {
   Heading3,
   Quote,
   List,
-  ListOrdered
-} from 'lucide-vue-next'
+  ListOrdered, SplitSquareVertical, Loader2 } from 'lucide-vue-next'
 import { useChaptersStore } from '@/stores/chapters'
 import type { Chapter } from '@shared/types'
 
@@ -45,10 +44,15 @@ const editor = useEditor({
     handleClick: mentionClickHandler((id) => bookUi.openCharacter(id))
   },
   onUpdate: () => {
+    refreshStats()
     if (loadingContent) return
     status.value = 'unsaved'
     scheduleSave()
   },
+  // Selection changes don't dirty the document, but they do change what the
+  // counter should be reporting.
+  onSelectionUpdate: () => refreshStats(),
+  onCreate: () => refreshStats(),
   onBlur: () => {
     if (status.value !== 'saved') void saveNow()
   }
@@ -97,6 +101,81 @@ function wordCount(): number {
   return text ? text.split(/\s+/).length : 0
 }
 
+/** Words and characters, live — for the whole chapter or just the selection. */
+const stats = ref({ words: 0, chars: 0, selected: false })
+const showSplit = ref(false)
+const splitTitle = ref('')
+const splitNotice = ref<string | null>(null)
+
+function refreshStats(): void {
+  const ed = editor.value
+  if (!ed) return
+  const { from, to, empty } = ed.state.selection
+  const text = empty
+    ? ed.getText()
+    : ed.state.doc.textBetween(from, to, ' ')
+  const trimmed = text.trim()
+  stats.value = {
+    words: trimmed ? trimmed.split(/\s+/).length : 0,
+    chars: text.length,
+    selected: !empty
+  }
+}
+
+const splitting = ref(false)
+
+/**
+ * Splits this chapter at the cursor. Everything from the cursor onward moves
+ * into a new chapter placed directly below — which is why the caret position,
+ * not the selection, is what matters.
+ */
+async function splitHere(): Promise<void> {
+  const ed = editor.value
+  if (!ed || loadedId == null) return
+  const at = ed.state.selection.from
+  const docEnd = ed.state.doc.content.size
+
+  if (at <= 1 || at >= docEnd - 1) {
+    splitNotice.value = 'Place the cursor where the new chapter should begin.'
+    setTimeout(() => (splitNotice.value = null), 4000)
+    return
+  }
+
+  splitting.value = true
+  try {
+    // Slice the document at the caret. Cutting the JSON rather than the text
+    // keeps formatting, images and marks intact on both sides.
+    const firstJson = ed.state.doc.cut(0, at).toJSON()
+    const secondJson = ed.state.doc.cut(at, docEnd).toJSON()
+
+    const countOf = (node: unknown): number => {
+      const parts: string[] = []
+      const walk = (n: any): void => {
+        if (typeof n?.text === 'string') parts.push(n.text)
+        n?.content?.forEach(walk)
+      }
+      walk(node)
+      const t = parts.join(' ').trim()
+      return t ? t.split(/\s+/).length : 0
+    }
+
+    await store.split({
+      id: loadedId,
+      firstContent: JSON.stringify(firstJson),
+      firstWordCount: countOf(firstJson),
+      secondTitle: splitTitle.value.trim() || `${title.value} (continued)`,
+      secondContent: JSON.stringify(secondJson),
+      secondWordCount: countOf(secondJson)
+    })
+    splitTitle.value = ''
+    showSplit.value = false
+  } finally {
+    splitting.value = false
+  }
+}
+
+
+
 function scheduleSave(): void {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => void saveNow(), prefs.autosaveMs)
@@ -115,6 +194,8 @@ async function saveNow(): Promise<void> {
 }
 
 function loadChapter(ch: Chapter | null): void {
+  // stats belong to the chapter on screen
+  setTimeout(refreshStats, 0)
   const ed = editor.value
   if (!ed) return
   loadingContent = true
@@ -212,6 +293,15 @@ const tools: Tool[] = [
       <button
         v-if="!app.focusMode"
         class="shrink-0 rounded-lg border border-border p-1.5 transition-colors"
+        :class="showSplit ? 'text-accent' : 'text-ink-dim hover:text-ink'"
+        title="Split this chapter at the cursor"
+        @click="showSplit = !showSplit"
+      >
+        <SplitSquareVertical :size="15" />
+      </button>
+      <button
+        v-if="!app.focusMode"
+        class="shrink-0 rounded-lg border border-border p-1.5 transition-colors"
         :class="showMeta ? 'text-accent' : 'text-ink-dim hover:text-ink'"
         title="Chapter details"
         @click="showMeta = !showMeta"
@@ -221,6 +311,37 @@ const tools: Tool[] = [
       <span class="shrink-0 text-xs text-ink-dim">{{
         status === 'saved' ? 'Saved' : status === 'saving' ? 'Saving…' : 'Unsaved'
       }}</span>
+    </div>
+
+    <!-- split -->
+    <div v-if="showSplit && !app.focusMode" class="border-b border-border px-6 py-3">
+      <p class="mb-2 text-xs text-ink-dim">
+        Everything from the cursor onward moves into a new chapter, placed directly below this one.
+      </p>
+      <div class="flex flex-wrap items-center gap-2">
+        <input
+          v-model="splitTitle"
+          class="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-accent-line"
+          :placeholder="`New chapter title (default: ${title} (continued))`"
+          @keydown.enter.prevent="splitHere"
+        />
+        <button
+          class="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent disabled:opacity-60"
+          :disabled="splitting"
+          @click="splitHere"
+        >
+          <Loader2 v-if="splitting" :size="14" class="animate-spin" />
+          <SplitSquareVertical v-else :size="14" />
+          Split here
+        </button>
+        <button
+          class="shrink-0 rounded-lg px-3 py-1.5 text-sm text-ink-dim hover:text-ink"
+          @click="showSplit = false"
+        >
+          Cancel
+        </button>
+      </div>
+      <p v-if="splitNotice" class="mt-2 text-xs text-amber-400">{{ splitNotice }}</p>
     </div>
 
     <!-- chapter details -->
@@ -295,6 +416,16 @@ const tools: Tool[] = [
         class="mx-auto"
         :class="app.focusMode ? FOCUS_WIDTH[prefs.focusWidth] : 'max-w-prose'"
       />
+    </div>
+
+    <!-- live counter; reports the selection when there is one -->
+    <div
+      v-if="!app.focusMode"
+      class="flex items-center gap-4 border-t border-border px-6 py-1.5 text-[11px] text-ink-dim"
+    >
+      <span v-if="stats.selected" class="font-medium text-accent">Selection</span>
+      <span class="tabular-nums">{{ stats.words.toLocaleString() }} words</span>
+      <span class="tabular-nums">{{ stats.chars.toLocaleString() }} characters</span>
     </div>
   </div>
 </template>

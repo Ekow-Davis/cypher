@@ -1,5 +1,6 @@
 import { shell, BrowserWindow } from 'electron'
 import { join } from 'node:path'
+import { attachContextMenu } from './contextMenu'
 import icon from '../../build/icon.png?asset'
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
@@ -64,9 +65,15 @@ export function createWindow(route = '/'): BrowserWindow | null {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // Chromium's own spellchecker: real dictionaries, downloaded and managed
+      // by Electron, working in every editable field at once. Enabling it here
+      // covers Book, Document and Diary without any per-editor wiring.
+      spellcheck: true
     }
   })
+
+  attachContextMenu(window)
 
   window.on('ready-to-show', () => window.show())
   window.webContents.setWindowOpenHandler(({ url }) => {

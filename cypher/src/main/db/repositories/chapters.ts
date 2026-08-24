@@ -3,8 +3,7 @@ import type {
   Chapter,
   ChapterPlacement,
   CreateChapterOptions,
-  UpdateChapterMetaInput
-} from '@shared/types'
+  UpdateChapterMetaInput, SplitChapterInput } from '@shared/types'
 
 /** Chapters repository. */
 
@@ -90,6 +89,90 @@ export function applyChapterOrder(items: ChapterPlacement[]): void {
 }
 
 /** Soft delete — the chapter moves to the trash and can be restored. */
+/**
+ * Splits a chapter in two, placing the new one immediately after the original.
+ *
+ * Everything after the original's position is shifted down first, so the new
+ * chapter lands in the right slot instead of at the end of the book — the
+ * whole point of splitting is that the halves stay adjacent. Both writes run
+ * in one transaction so a failure can't leave the manuscript half-split.
+ */
+export function splitChapter(input: SplitChapterInput): Chapter[] | null {
+  const db = getDb()
+  const original = getChapter(input.id)
+  if (!original) return null
+
+  const run = db.transaction(() => {
+    db.prepare(
+      "UPDATE chapters SET content = ?, word_count = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(input.firstContent, input.firstWordCount, input.id)
+
+    // Make room directly below the original.
+    db.prepare(
+      'UPDATE chapters SET sort_order = sort_order + 1 WHERE book_id = ? AND sort_order > ?'
+    ).run(original.book_id, original.sort_order)
+
+    db.prepare(
+      `INSERT INTO chapters (book_id, volume_id, title, content, word_count, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(
+      original.book_id,
+      original.volume_id,
+      input.secondTitle.trim() || 'Untitled chapter',
+      input.secondContent,
+      input.secondWordCount,
+      original.sort_order + 1
+    )
+  })
+
+  run()
+  return listChapters(original.book_id)
+}
+
+export interface ImportedChapterInput {
+  title: string
+  content: string
+  wordCount: number
+}
+
+/**
+ * Appends imported chapters to a book in one transaction.
+ *
+ * All-or-nothing on purpose: a partial import would leave the writer manually
+ * deleting half a manuscript to try again.
+ */
+export function importChapters(
+  bookId: number,
+  items: ImportedChapterInput[],
+  volumeId: number | null = null
+): Chapter[] {
+  const db = getDb()
+  const start = (
+    db
+      .prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM chapters WHERE book_id = ?')
+      .get(bookId) as { m: number }
+  ).m
+
+  const insert = db.prepare(
+    `INSERT INTO chapters (book_id, volume_id, title, content, word_count, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  )
+  const run = db.transaction(() => {
+    items.forEach((item, i) => {
+      insert.run(
+        bookId,
+        volumeId,
+        item.title.trim() || `Chapter ${i + 1}`,
+        item.content,
+        item.wordCount,
+        start + 1 + i
+      )
+    })
+  })
+  run()
+  return listChapters(bookId)
+}
+
 export function deleteChapter(id: number): void {
   getDb().prepare("UPDATE chapters SET deleted_at = datetime('now') WHERE id = ?").run(id)
 }
