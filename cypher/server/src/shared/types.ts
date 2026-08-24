@@ -378,3 +378,33 @@ export interface ShareSnapshot {
     words: number
   }[]
 }
+
+export interface SplitChapterInput {
+  id: number
+  /** Content that stays in the original chapter. */
+  firstContent: string
+  firstWordCount: number
+  /** Content that moves into the new chapter. */
+  secondTitle: string
+  secondContent: string
+  secondWordCount: number
+}
+
+export interface ImportedChapterInput {
+  title: string
+  content: string
+  wordCount: number
+}
+
+export interface DetectedChapter {
+  title: string
+  html: string
+  words: number
+}
+
+export interface ManuscriptImport {
+  mode: 'headings' | 'patterns' | 'none'
+  chapters: DetectedChapter[]
+  fileName: string
+  totalWords: number
+}
