@@ -1,4 +1,5 @@
 import { Menu, MenuItem, BrowserWindow, session } from 'electron'
+import { getSetting, setSetting } from './settings'
 
 /**
  * Right-click menu for editable text: spelling corrections, dictionary
@@ -11,12 +12,21 @@ import { Menu, MenuItem, BrowserWindow, session } from 'electron'
 
 const DEFAULT_LANGUAGE = 'en-US'
 
+/**
+ * Restores the writer's chosen dictionary at boot.
+ *
+ * Without this the language silently reset to en-US on every launch, since
+ * Chromium's spellchecker doesn't remember a choice on its own — Electron
+ * exposes the setter but not persistence, so Cypher has to do that part.
+ */
 export function initSpellcheck(): void {
   const ses = session.defaultSession
   try {
     const available = ses.availableSpellCheckerLanguages
-    if (available.includes(DEFAULT_LANGUAGE)) {
-      ses.setSpellCheckerLanguages([DEFAULT_LANGUAGE])
+    const saved = getSetting('spellcheckLanguage') as string | null | undefined
+    const language = saved && available.includes(saved) ? saved : DEFAULT_LANGUAGE
+    if (available.includes(language)) {
+      ses.setSpellCheckerLanguages([language])
     }
     ses.setSpellCheckerEnabled(true)
   } catch {
@@ -122,6 +132,7 @@ export function spellcheckLanguages(): { current: string[]; available: string[] 
 export function setSpellcheckLanguages(languages: string[]): void {
   try {
     session.defaultSession.setSpellCheckerLanguages(languages)
+    if (languages[0]) setSetting('spellcheckLanguage', languages[0])
   } catch {
     /* ignore an unsupported language */
   }

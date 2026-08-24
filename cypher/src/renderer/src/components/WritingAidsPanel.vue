@@ -1,12 +1,24 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { SpellCheck, BookA, Plus, X, Globe } from 'lucide-vue-next'
+import { ref, computed, onMounted } from 'vue'
+import { SpellCheck, BookA, Plus, X, Globe, ChevronDown } from 'lucide-vue-next'
 
 const spellEnabled = ref(true)
 const languages = ref<{ current: string[]; available: string[] }>({ current: [], available: [] })
 const words = ref<string[]>([])
 const newWord = ref('')
 const thesaurusOn = ref(false)
+const showAllLanguages = ref(false)
+
+/** The two spellings a novelist actually chooses between, front and centre. */
+const COMMON = [
+  { code: 'en-US', label: 'American English' },
+  { code: 'en-GB', label: 'British English' }
+]
+const activeLanguage = computed(() => languages.value.current[0] ?? 'en-US')
+/** Anything beyond the two common ones — offered, not hidden away entirely. */
+const otherLanguages = computed(() =>
+  languages.value.available.filter((code) => !COMMON.some((c) => c.code === code))
+)
 
 async function load(): Promise<void> {
   spellEnabled.value = await window.cypher.spell.enabled()
@@ -71,14 +83,42 @@ onMounted(load)
 
     <div v-if="spellEnabled && languages.available.length" class="mb-5">
       <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-dim">
-        Dictionary
+        Spelling
       </label>
+      <div class="grid grid-cols-2 gap-1.5">
+        <button
+          v-for="lang in COMMON"
+          :key="lang.code"
+          class="rounded-xl border px-3 py-2 text-left text-sm transition-colors"
+          :class="
+            activeLanguage === lang.code
+              ? 'border-accent bg-accent-soft text-ink'
+              : 'border-border text-ink-dim hover:bg-surface-2'
+          "
+          :disabled="!languages.available.includes(lang.code)"
+          @click="setLanguage(lang.code)"
+        >
+          {{ lang.label }}
+          <span class="block text-[10px] opacity-60">colour / color</span>
+        </button>
+      </div>
+
+      <button
+        v-if="otherLanguages.length"
+        class="mt-2 flex items-center gap-1 text-xs text-ink-dim hover:text-ink"
+        @click="showAllLanguages = !showAllLanguages"
+      >
+        <ChevronDown :size="12" :class="showAllLanguages ? 'rotate-180' : ''" class="transition-transform" />
+        {{ showAllLanguages ? 'Fewer languages' : 'Other languages' }}
+      </button>
       <select
-        class="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent-line"
-        :value="languages.current[0] ?? ''"
+        v-if="showAllLanguages"
+        class="mt-2 w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent-line"
+        :value="activeLanguage"
         @change="setLanguage(($event.target as HTMLSelectElement).value)"
       >
-        <option v-for="code in languages.available" :key="code" :value="code">{{ code }}</option>
+        <option v-for="lang in COMMON" :key="lang.code" :value="lang.code">{{ lang.label }}</option>
+        <option v-for="code in otherLanguages" :key="code" :value="code">{{ code }}</option>
       </select>
     </div>
 
