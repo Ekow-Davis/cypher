@@ -7,6 +7,11 @@ import { startBackupScheduler, stopBackupScheduler } from './backup'
 import { purgeExpiredTrash } from './db/repositories/trash'
 import { registerAssetSchemePrivileged, registerAssetProtocol } from './assets'
 import { createWindow } from './windows'
+import { redirectPortableStorage } from './portable'
+
+// Must run before anything else touches app.getPath('userData') — including
+// the scheme registration below, which is why it comes first in the file.
+redirectPortableStorage()
 
 // Privileged schemes must be declared before the app is ready.
 registerAssetSchemePrivileged()

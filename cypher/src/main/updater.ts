@@ -1,5 +1,6 @@
 import { autoUpdater } from 'electron-updater'
 import { app, BrowserWindow, ipcMain } from 'electron'
+import { isPortable } from './portable'
 
 /**
  * Update checking, backed by GitHub Releases.
@@ -66,8 +67,19 @@ export function initUpdater(): void {
     // A dev build has no installer to patch, and asking GitHub would only
     // produce a confusing error. app.isPackaged is Electron's own signal, so
     // this needs no extra dependency.
-    if (!app.isPackaged) {
-      broadcast({ status: 'none' })
+    //
+    // The portable build is skipped too: there is no installed copy for
+    // electron-updater to replace in place, so it always downloads the whole
+    // installer and cannot run it silently. Portable users update by
+    // downloading the newer portable exe themselves — the app tells them so
+    // rather than pretending a check happened.
+    if (!app.isPackaged || isPortable()) {
+      broadcast({
+        status: isPortable() ? 'error' : 'none',
+        ...(isPortable() && {
+          message: 'The portable build updates by downloading a newer version — automatic updates are for the installed version.'
+        })
+      } as never)
       return state
     }
     try {
@@ -97,7 +109,7 @@ export function initUpdater(): void {
 
 /** A quiet check shortly after launch, so updates surface without being asked for. */
 export function checkOnStartup(): void {
-  if (!app.isPackaged) return
+  if (!app.isPackaged || isPortable()) return
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch(() => {
       /* offline is not an error worth reporting */

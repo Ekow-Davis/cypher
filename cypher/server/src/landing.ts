@@ -14,6 +14,8 @@ const ACCENT = '#a78bfa'
 export interface LandingOptions {
   /** Where the installer lives — a GitHub release, usually. */
   downloadUrl?: string
+  /** Where the portable exe lives, if offered. */
+  portableUrl?: string
   version?: string
 }
 
@@ -38,6 +40,7 @@ const FEATURES: { title: string; body: string }[] = [
 
 export function renderLandingPage(options: LandingOptions = {}): string {
   const download = options.downloadUrl ?? ''
+  const portable = options.portableUrl ?? ''
   const version = options.version ?? ''
 
   const features = FEATURES.map(
@@ -48,8 +51,25 @@ export function renderLandingPage(options: LandingOptions = {}): string {
   ).join('')
 
   const downloadBlock = download
-    ? `<a class="btn primary" href="${download}">Download for Windows${version ? ` · ${version}` : ''}</a>
-       <p class="fineprint">Unsigned build — Windows will ask you to confirm via <em>More info → Run anyway</em>.</p>`
+    ? `<div class="downloads">
+         <a class="btn primary" href="${download}">Download Cypher${version ? ` · ${version}` : ''}</a>
+         ${portable ? `<a class="btn ghost" href="${portable}">Portable version</a>` : ''}
+       </div>
+       <p class="fineprint">Unsigned build — Windows will ask you to confirm via <em>More info → Run anyway</em>.</p>
+       <details class="which">
+         <summary>Which one should I pick?</summary>
+         <div class="which-body">
+           <p><strong>Cypher (installer)</strong> — the normal choice. Adds a Start Menu shortcut
+           and updates itself automatically from then on. Your books, documents and diary are
+           stored separately from the program, so uninstalling later keeps everything safe —
+           reinstalling brings it all back.</p>
+           <p><strong>Portable</strong> — a single file with nothing to install, for a USB stick or
+           a machine where you can't install software. Everything it saves lives in a folder next
+           to the exe, so the two travel together: move that folder along with the exe to take
+           your work with you, and deleting the exe's folder deletes your work too. It does not
+           update itself — check back here for a newer version when you want one.</p>
+         </div>
+       </details>`
     : `<p class="fineprint">Downloads are not published yet.</p>`
 
   return `<!DOCTYPE html>
@@ -76,6 +96,15 @@ header { padding:1.2rem 0; border-bottom:1px solid var(--line); }
 .btn.primary { background:var(--accent); color:#1a1030; border-color:transparent; }
 .btn.primary:hover { opacity:.9; }
 .fineprint { color:var(--dim); font-size:.82rem; margin:.9rem 0 0; }
+.downloads { display:flex; gap:.6rem; justify-content:center; flex-wrap:wrap; }
+.btn.ghost { background:transparent; }
+.which { margin:1.1rem auto 0; max-width:30rem; text-align:left; }
+.which summary { cursor:pointer; color:var(--accent); font-size:.85rem; text-align:center; }
+.which-body { margin-top:.7rem; padding:1rem; background:var(--panel); border:1px solid var(--line);
+  border-radius:.8rem; font-size:.85rem; color:var(--dim); }
+.which-body p { margin:0 0 .8rem; }
+.which-body p:last-child { margin-bottom:0; }
+.which-body strong { color:var(--ink); }
 h2.section { font-size:1.5rem; margin:0 0 1.5rem; }
 .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(15rem,1fr)); gap:1rem; }
 .card { background:var(--panel); border:1px solid var(--line); border-radius:1rem; padding:1.3rem; }

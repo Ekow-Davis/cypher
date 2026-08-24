@@ -84,6 +84,12 @@ onBeforeUnmount(() => stop?.())
     </p>
 
     <p
+      v-else-if="state.status === 'error' && state.message?.includes('portable')"
+      class="mb-3 flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs text-ink-dim"
+    >
+      <AlertCircle :size="14" class="mt-0.5 shrink-0" />{{ state.message }}
+    </p>
+    <p
       v-else-if="state.status === 'error'"
       class="mb-3 flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300"
     >
@@ -106,7 +112,7 @@ onBeforeUnmount(() => stop?.())
         <Download :size="15" /> Download update
       </button>
       <button
-        v-else
+        v-else-if="!(state.status === 'error' && state.message?.includes('portable'))"
         class="flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm text-ink-dim hover:text-ink disabled:opacity-60"
         :disabled="busy"
         @click="check"
