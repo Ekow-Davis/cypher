@@ -66,6 +66,7 @@ app.get('/', async (_request, reply) =>
   reply.type('text/html').send(
     renderLandingPage({
       downloadUrl: process.env.DOWNLOAD_URL,
+      portableUrl: process.env.PORTABLE_URL,
       version: process.env.APP_VERSION
     })
   )
