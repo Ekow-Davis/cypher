@@ -9,16 +9,17 @@ import {
   UserRound,
   AlertCircle,
   X,
-  Search
-} from 'lucide-vue-next'
+  Search, FileInput } from 'lucide-vue-next'
 import { useCharactersStore } from '@/stores/characters'
 import { assetUrl } from '@/lib/assets'
 import CharacterSheet from './CharacterSheet.vue'
 import CharacterSearch from './CharacterSearch.vue'
+import ImportCharactersDialog from './ImportCharactersDialog.vue'
 import { useBreakpoint } from '@/lib/useBreakpoint'
 
 const store = useCharactersStore()
 const { isTight } = useBreakpoint()
+const showImport = ref(false)
 const collapsed = reactive<Record<string, boolean>>({})
 const searching = ref(false)
 
@@ -79,6 +80,13 @@ async function confirmNewFolder(): Promise<void> {
               @click="startNewFolder"
             >
               <FolderPlus :size="16" />
+            </button>
+            <button
+              class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+              title="Import character sheets"
+              @click="showImport = true"
+            >
+              <FileInput :size="16" />
             </button>
             <button
               class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
@@ -174,4 +182,10 @@ async function confirmNewFolder(): Promise<void> {
       </main>
     </div>
   </div>
+
+  <ImportCharactersDialog
+    v-if="showImport && store.bookId !== null"
+    :book-id="store.bookId"
+    @close="showImport = false"
+  />
 </template>

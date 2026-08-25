@@ -54,6 +54,8 @@ import {
 } from './contextMenu'
 import { lookupWord, thesaurusEnabled } from './thesaurus'
 import { importManuscript } from './import/importManuscript'
+import { exportCharacterTemplate } from './characters/template'
+import { importCharacterSheets } from './characters/import'
 import {
   importScriptFont,
   getScriptFont,
@@ -290,6 +292,8 @@ export function registerIpcHandlers(): void {
     updateChapterMeta(id, patch)
   )
   handle('chapters:applyOrder', (_e, items: ChapterPlacement[]) => applyChapterOrder(items))
+  handle('characters:template', () => exportCharacterTemplate())
+  handle('characters:importSheets', () => importCharacterSheets())
   handle('chapters:importPick', () => importManuscript())
   handle(
     'chapters:importApply',

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, reactive, watch, onBeforeUnmount, type Component } from 'vue'
+import { ref, reactive, watch, nextTick, onBeforeUnmount, type Component } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
+import { FindReplace, findKey, findMatches } from '@/lib/findReplace'
+import { applyCase, type CaseMode } from '@/lib/textCase'
 import { createCharacterMention, mentionClickHandler } from '@/lib/characterMention'
 import { useBookUiStore } from '@/stores/bookUi'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -37,7 +39,7 @@ let loadingContent = false // suppress autosave while we set content programmati
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 const editor = useEditor({
-  extensions: [StarterKit, createCharacterMention()],
+  extensions: [StarterKit, createCharacterMention(), FindReplace],
   content: '',
   editorProps: {
     attributes: { class: 'cypher-prose' },
@@ -122,6 +124,98 @@ function refreshStats(): void {
   }
 }
 
+/**
+ * Paints search hits and scrolls the requested one into view.
+ *
+ * Matches are recomputed from the live document rather than trusted from the
+ * sidebar, so a hit that moved (or vanished) while editing resolves against
+ * what is actually on screen instead of a stale offset.
+ */
+function applySearchTarget(): void {
+  const ed = editor.value
+  const target = bookUi.searchTarget
+  if (!ed) return
+
+  if (!target || target.chapterId !== loadedId) {
+    // Clear stale highlights when the target moves to another chapter.
+    if (findKey.getState(ed.state)?.matches.length) {
+      ed.view.dispatch(ed.state.tr.setMeta(findKey, { matches: [], active: 0 }))
+    }
+    return
+  }
+
+  const matches = findMatches(ed.state, target.query, false)
+  if (!matches.length) return
+  const active = Math.min(target.hitIndex, matches.length - 1)
+  ed.view.dispatch(ed.state.tr.setMeta(findKey, { matches, active }))
+
+  const hit = matches[active]
+  ed.chain().setTextSelection({ from: hit.from, to: hit.to }).run()
+  const dom = ed.view.domAtPos(hit.from).node as HTMLElement
+  const el = dom.nodeType === 1 ? dom : dom.parentElement
+  el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+}
+
+// The chapter may still be loading when the jump is requested, so re-run once
+// content settles as well as when the target changes.
+watch(() => bookUi.searchTarget, () => void nextTick(applySearchTarget), { deep: true })
+
+/**
+ * Carries out a replace requested from the search sidebar.
+ *
+ * Matches are found fresh and replaced from the end backwards, because
+ * replacing front-to-first shifts every later position — the classic way a
+ * replace-all corrupts a document.
+ */
+function applyReplaceRequest(): void {
+  const ed = editor.value
+  const request = bookUi.replaceRequest
+  if (!ed || !request || request.chapterId !== loadedId) return
+
+  const matches = findMatches(ed.state, request.query, false)
+  if (!matches.length) return
+
+  const targets =
+    request.hitIndex === null
+      ? matches
+      : matches[request.hitIndex]
+        ? [matches[request.hitIndex]]
+        : []
+  if (!targets.length) return
+
+  const chain = ed.chain().focus()
+  for (const hit of [...targets].reverse()) {
+    chain.insertContentAt({ from: hit.from, to: hit.to }, request.replacement)
+  }
+  chain.run()
+
+  bookUi.replaceRequest = null
+  status.value = 'unsaved'
+  scheduleSave()
+}
+
+watch(() => bookUi.replaceRequest, () => void nextTick(applyReplaceRequest), { deep: true })
+
+/** Case transforms applied to the current selection. */
+function transformCase(mode: CaseMode): void {
+  const ed = editor.value
+  if (!ed) return
+  const { from, to, empty } = ed.state.selection
+  if (empty) return
+  const text = ed.state.doc.textBetween(from, to, ' ')
+  const next = applyCase(text, mode)
+  if (next === text) return
+  ed.chain().focus().insertContentAt({ from, to }, next).run()
+}
+
+/** Case buttons; the glyph shows the effect rather than naming it. */
+const CASE_TOOLS: { mode: CaseMode; label: string; glyph: string }[] = [
+  { mode: 'upper', label: 'UPPERCASE', glyph: 'AA' },
+  { mode: 'lower', label: 'lowercase', glyph: 'aa' },
+  { mode: 'title', label: 'Title Case', glyph: 'Aa' },
+  { mode: 'sentence', label: 'Sentence case', glyph: 'A.' }
+]
+
 const splitting = ref(false)
 
 /**
@@ -196,6 +290,7 @@ async function saveNow(): Promise<void> {
 function loadChapter(ch: Chapter | null): void {
   // stats belong to the chapter on screen
   setTimeout(refreshStats, 0)
+  setTimeout(applySearchTarget, 0)
   const ed = editor.value
   if (!ed) return
   loadingContent = true
@@ -406,6 +501,19 @@ const tools: Tool[] = [
         @click="t.run()"
       >
         <component :is="t.icon" :size="16" />
+      </button>
+
+      <span class="mx-1 h-4 w-px shrink-0 bg-border" />
+      <button
+        v-for="c in CASE_TOOLS"
+        :key="c.mode"
+        :title="`${c.label} (needs a selection)`"
+        :disabled="!stats.selected"
+        class="rounded-md px-2 py-2 text-[11px] font-semibold transition-colors disabled:opacity-35"
+        :class="stats.selected ? 'text-ink-dim hover:bg-surface-2 hover:text-ink' : 'text-ink-dim'"
+        @click="transformCase(c.mode)"
+      >
+        {{ c.glyph }}
       </button>
     </div>
 

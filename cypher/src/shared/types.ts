@@ -408,3 +408,15 @@ export interface ManuscriptImport {
   fileName: string
   totalWords: number
 }
+
+export interface ImportedCharacter {
+  name: string
+  sheet: CharacterSheet
+  filled: number
+}
+
+export interface CharacterImportResult {
+  fileName: string
+  characters: ImportedCharacter[]
+  unknownLabels: string[]
+}

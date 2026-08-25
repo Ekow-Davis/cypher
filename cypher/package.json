@@ -1,6 +1,6 @@
 {
   "name": "cypher",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A private encrypted journal and long-form writing studio.",
   "author": "HouseOfD/Ekow-Davis",
   "main": "./out/main/index.js",

@@ -45,3 +45,81 @@ export function snippetHtml(text: string, query: string, radius = 70): string {
   const post = escapeHtml(clean.slice(idx + q.length, end)) + (end < clean.length ? '…' : '')
   return `${pre}<mark class="cypher-mark">${hit}</mark>${post}`
 }
+
+
+export interface DocOccurrence {
+  /** Position in the chapter's hit list — the Nth match in document order. */
+  index: number
+  /** Excerpt with the match wrapped in <mark>. */
+  snippet: string
+  /** Roughly how far through the chapter this sits, 0–1, for a position hint. */
+  progress: number
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+/**
+ * Every occurrence of `query` in a chapter, in document order.
+ *
+ * Deliberately mirrors findMatches() in findReplace.ts: it searches inside each
+ * text node rather than across the whole flattened string, so a phrase broken
+ * by a bold run is not counted here either. That parity is what lets the
+ * sidebar say "hit 3" and the editor jump to the same hit 3 — if the two
+ * counted differently, every click would land on the wrong word.
+ */
+export function findOccurrences(contentJson: string, query: string): DocOccurrence[] {
+  const q = query.trim().toLowerCase()
+  if (!q || !contentJson) return []
+
+  let doc: any
+  try {
+    doc = JSON.parse(contentJson)
+  } catch {
+    return []
+  }
+
+  // Collect text nodes with their offset into the flattened text, so a snippet
+  // can show context that crosses node boundaries even though matches cannot.
+  const nodes: { text: string; offset: number }[] = []
+  let flat = ''
+  const walk = (node: any): void => {
+    if (typeof node?.text === 'string') {
+      nodes.push({ text: node.text, offset: flat.length })
+      flat += node.text
+      return
+    }
+    if (Array.isArray(node?.content)) {
+      node.content.forEach(walk)
+      // Block boundaries read as a space in the flattened text.
+      if (node.type && node.type !== 'text') flat += ' '
+    }
+  }
+  walk(doc)
+
+  const occurrences: DocOccurrence[] = []
+  for (const node of nodes) {
+    const hay = node.text.toLowerCase()
+    let at = hay.indexOf(q)
+    while (at !== -1) {
+      const globalAt = node.offset + at
+      occurrences.push({
+        index: occurrences.length,
+        snippet: snippetAround(flat, globalAt, query.trim().length),
+        progress: flat.length ? globalAt / flat.length : 0
+      })
+      at = hay.indexOf(q, at + q.length)
+    }
+  }
+  return occurrences
+}
+
+/** Excerpt around a known offset, so each hit shows its own context. */
+function snippetAround(text: string, at: number, length: number, radius = 55): string {
+  const start = Math.max(0, at - radius)
+  const end = Math.min(text.length, at + length + radius)
+  const pre = (start > 0 ? '…' : '') + escapeHtml(text.slice(start, at).replace(/\s+/g, ' '))
+  const hit = escapeHtml(text.slice(at, at + length))
+  const post =
+    escapeHtml(text.slice(at + length, end).replace(/\s+/g, ' ')) + (end < text.length ? '…' : '')
+  return `${pre}<mark class="cypher-mark">${hit}</mark>${post}`
+}

@@ -10,6 +10,7 @@ import type {
   SplitChapterInput,
   ImportedChapterInput,
   ManuscriptImport,
+  CharacterImportResult,
   Volume,
   Goal,
   Checkin,
@@ -178,6 +179,10 @@ const cypher = {
   },
 
   characters: {
+    downloadTemplate: (): Promise<{ path: string | null; cancelled?: boolean; error?: string }> =>
+      ipcRenderer.invoke('characters:template'),
+    importSheets: (): Promise<CharacterImportResult | null> =>
+      ipcRenderer.invoke('characters:importSheets'),
     list: (bookId: number): Promise<Character[]> =>
       ipcRenderer.invoke('characters:list', bookId),
     get: (id: number): Promise<Character | null> => ipcRenderer.invoke('characters:get', id),
