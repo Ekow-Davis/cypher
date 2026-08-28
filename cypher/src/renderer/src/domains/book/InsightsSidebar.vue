@@ -377,7 +377,12 @@ function analyze(): void {
                   >−{{ insights.deletedToday.toLocaleString() }}</span
                 >
               </div>
-              <div class="text-[10px] text-ink-dim">written / deleted today</div>
+              <div class="text-[10px] text-ink-dim">
+                written / deleted today
+                <span v-if="insights.deletedToday > 0" class="text-ink">
+                  · net {{ (insights.wordsToday - insights.deletedToday).toLocaleString() }}
+                </span>
+              </div>
             </div>
             <div class="text-right">
               <div class="flex items-center gap-1 text-2xl font-bold tabular-nums">

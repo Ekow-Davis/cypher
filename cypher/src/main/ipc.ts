@@ -27,6 +27,7 @@ import {
   listVolumes,
   createVolume,
   renameVolume,
+  setVolumeNumbering,
   deleteVolume,
   reorderVolumes
 } from './db/repositories/volumes'
@@ -307,6 +308,9 @@ export function registerIpcHandlers(): void {
   handle('volumes:list', (_e, bookId: number) => listVolumes(bookId))
   handle('volumes:create', (_e, bookId: number, title?: string) =>
     createVolume(bookId, title)
+  )
+  handle('volumes:setNumbering', (_e, id: number, numbered: boolean, label: string) =>
+    setVolumeNumbering(id, numbered, label)
   )
   handle('volumes:rename', (_e, id: number, title: string) => renameVolume(id, title))
   handle('volumes:delete', (_e, id: number, deleteChapters?: boolean) =>

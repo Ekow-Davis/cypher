@@ -380,3 +380,20 @@ export function migration017(db: Database): void {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_share_token ON share_links(token);
   `)
 }
+
+/**
+ * Migration 018 — computed chapter numbering.
+ *
+ * `numbering_style` on books turns automatic numbering on and chooses its
+ * wording; `numbered` on volumes lets a volume opt out (a prologue collection,
+ * an appendix) without disturbing the sequence its neighbours share.
+ * Numbers themselves are never stored — they are derived from position at
+ * render time, so they cannot go stale.
+ */
+export function migration018(db: Database): void {
+  db.exec(`
+    ALTER TABLE books ADD COLUMN numbering_style TEXT NOT NULL DEFAULT 'off';
+    ALTER TABLE volumes ADD COLUMN numbered INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE volumes ADD COLUMN unnumbered_label TEXT NOT NULL DEFAULT '';
+  `)
+}

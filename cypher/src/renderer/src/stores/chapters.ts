@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { numberChapters, type NumberingStyle } from '@shared/numbering'
 import { ref, computed } from 'vue'
 import type {
   Chapter,
@@ -18,12 +19,16 @@ export const useChaptersStore = defineStore('chapters', () => {
 
   async function loadForBook(id: number): Promise<void> {
     bookId.value = id
-    const [vols, chs] = await Promise.all([
+    const [vols, chs, book] = await Promise.all([
       window.cypher.volumes.list(id),
-      window.cypher.chapters.ensureFirst(id)
+      window.cypher.chapters.ensureFirst(id),
+      window.cypher.books.get(id)
     ])
     volumes.value = vols
     chapters.value = chs
+    // The book carries its own numbering preference, so reopening it looks the
+    // same as when it was left.
+    numberingStyle.value = (book?.numbering_style as NumberingStyle) ?? 'off'
     activeId.value = chs[0]?.id ?? null
   }
 
@@ -62,6 +67,63 @@ export const useChaptersStore = defineStore('chapters', () => {
     const created = updated.find((c) => !before.has(c.id))
     if (created) activeId.value = created.id
     return created?.id ?? null
+  }
+
+  /** How this book numbers chapters; 'off' leaves titles exactly as written. */
+  const numberingStyle = ref<NumberingStyle>('off')
+
+  /**
+   * Display titles for every chapter, numbered from position.
+   *
+   * One computed map that every surface reads, so the sidebar, the editor
+   * header and the exports cannot disagree about what chapter something is.
+   */
+  const numbered = computed(() =>
+    numberChapters(
+      chapters.value.map((c) => ({
+        id: c.id,
+        title: c.title,
+        volume_id: c.volume_id,
+        sort_order: c.sort_order
+      })),
+      volumes.value.map((v) => ({
+        id: v.id,
+        numbered: v.numbered ?? 1,
+        unnumbered_label: v.unnumbered_label ?? ''
+      })),
+      numberingStyle.value
+    )
+  )
+
+  const numberedById = computed(() => new Map(numbered.value.map((n) => [n.id, n])))
+
+  /** The title to show for a chapter — numbered when numbering is on. */
+  function displayTitle(id: number): string {
+    return numberedById.value.get(id)?.displayTitle ?? ''
+  }
+
+  function chapterNumber(id: number): number | null {
+    return numberedById.value.get(id)?.number ?? null
+  }
+
+  async function setNumberingStyle(style: NumberingStyle): Promise<void> {
+    numberingStyle.value = style
+    if (bookId.value != null) {
+      await window.cypher.books.update(bookId.value, { numbering_style: style })
+    }
+  }
+
+  async function setVolumeNumbering(
+    volumeId: number,
+    isNumbered: boolean,
+    label: string
+  ): Promise<void> {
+    await window.cypher.volumes.setNumbering(volumeId, isNumbered, label)
+    const volume = volumes.value.find((v) => v.id === volumeId)
+    if (volume) {
+      volume.numbered = isNumbered ? 1 : 0
+      volume.unnumbered_label = label
+    }
   }
 
   async function remove(id: number): Promise<void> {
@@ -181,6 +243,13 @@ export const useChaptersStore = defineStore('chapters', () => {
     saveContent,
     saveMeta,
     split,
+    numberingStyle,
+    numbered,
+    numberedById,
+    displayTitle,
+    chapterNumber,
+    setNumberingStyle,
+    setVolumeNumbering,
     remove,
     applyOrder,
     setActive,

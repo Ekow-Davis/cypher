@@ -26,10 +26,18 @@ export function getCheckin(ownerType: string, ownerId: number, date: string): Ch
 }
 
 /**
- * Records today's running word total and derives words-written from a per-day
- * baseline. The baseline is the previous day's ending total (so writing carries
- * across days); if there is no prior day, today's first total becomes the
- * baseline (so same-day writing still counts).
+ * Records today's running word total, tracking words added and removed
+ * separately.
+ *
+ * Gross figures come from comparing each save against the previous one rather
+ * than against the day's opening total: a net-only baseline hides deletions
+ * entirely, so writing 500 and cutting 300 looked identical to writing 200.
+ * Each save's difference is added to whichever bucket it belongs in, so the
+ * day ends with an honest "added 500, deleted 300" instead.
+ *
+ * The limit worth knowing: adding and deleting between two saves nets out
+ * within that interval. Catching that would need real text diffing, which is a
+ * much larger machine for very little extra truth.
  */
 export function snapshotProgress(
   ownerType: string,
@@ -40,14 +48,15 @@ export function snapshotProgress(
   const db = getDb()
   const existing = getCheckin(ownerType, ownerId, date)
 
-  // Baseline already established for today (and not a mood-only row): just update.
+  // Baseline already established for today (and not a mood-only row): update
+  // the running totals using the change since the previous save.
   if (existing && existing.day_start_words != null) {
-    const written = Math.max(0, totalWords - existing.day_start_words)
-    db.prepare('UPDATE checkins SET total_words = ?, words_written = ? WHERE id = ?').run(
-      totalWords,
-      written,
-      existing.id
-    )
+    const delta = totalWords - existing.total_words
+    const added = existing.words_written + Math.max(0, delta)
+    const deleted = (existing.words_deleted ?? 0) + Math.max(0, -delta)
+    db.prepare(
+      'UPDATE checkins SET total_words = ?, words_written = ?, words_deleted = ? WHERE id = ?'
+    ).run(totalWords, added, deleted, existing.id)
     return getCheckin(ownerType, ownerId, date) as Checkin
   }
 

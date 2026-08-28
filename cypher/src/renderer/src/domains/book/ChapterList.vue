@@ -142,7 +142,7 @@ async function confirmDeleteVolume(): Promise<void> {
       <!-- volumes -->
       <div v-for="(g, gi) in groups" :key="g.volume.id" class="mb-1">
         <div
-          class="group/vol mx-2 flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-dim hover:bg-surface-2"
+          class="group/vol sticky top-0 z-10 mx-2 flex items-center gap-1 rounded-lg border-b border-transparent bg-surface px-2 py-1.5 text-ink-dim shadow-[0_1px_0_0_var(--color-border)] hover:bg-surface-2"
         >
           <button class="shrink-0 rounded p-0.5 hover:text-ink" @click="toggleCollapse(g.volume.id)">
             <component :is="collapsed[g.volume.id] ? ChevronRight : ChevronDown" :size="14" />
@@ -165,6 +165,16 @@ async function confirmDeleteVolume(): Promise<void> {
 
           <span class="shrink-0 text-[10px]">{{ g.items.length }}</span>
 
+          <!-- Always visible: reaching this from chapter 200 is the whole point
+               of pinning the header, so it must not need a hover to appear. -->
+          <button
+            class="shrink-0 rounded p-0.5 hover:bg-surface hover:text-accent"
+            :title="`Add a chapter to ${g.volume.title}`"
+            @click="store.add(g.volume.id)"
+          >
+            <Plus :size="14" />
+          </button>
+
           <div class="flex shrink-0 items-center opacity-0 transition-opacity group-hover/vol:opacity-100">
             <button
               class="rounded p-0.5 hover:text-ink disabled:opacity-30"
@@ -181,13 +191,6 @@ async function confirmDeleteVolume(): Promise<void> {
               @click="store.moveVolume(g.volume.id, 1)"
             >
               <ChevronDown :size="13" />
-            </button>
-            <button
-              class="rounded p-0.5 hover:text-ink"
-              title="Add chapter to volume"
-              @click="store.add(g.volume.id)"
-            >
-              <Plus :size="13" />
             </button>
             <button
               class="rounded p-0.5 hover:text-red-400"
@@ -223,9 +226,13 @@ async function confirmDeleteVolume(): Promise<void> {
               :size="13"
               class="drag-handle shrink-0 cursor-grab opacity-0 group-hover/row:opacity-50"
             />
-            <span class="w-4 shrink-0 text-[11px] text-ink-dim">{{ i + 1 }}</span>
+            <!-- The running number across the whole book, not the position
+                 within this volume — which is what restarted at 1 per volume. -->
+            <span class="w-5 shrink-0 text-[11px] tabular-nums text-ink-dim">
+              {{ store.chapterNumber(ch.id) ?? (store.numberingStyle === 'off' ? i + 1 : '–') }}
+            </span>
             <div class="min-w-0 flex-1">
-              <span class="block truncate text-sm">{{ ch.title }}</span>
+              <span class="block truncate text-sm">{{ store.displayTitle(ch.id) || ch.title }}</span>
               <span class="flex items-center gap-1 text-[10px] text-ink-dim">
                 <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="dotFor(ch)" :title="ch.status" />
                 {{ ch.word_count.toLocaleString() }} words

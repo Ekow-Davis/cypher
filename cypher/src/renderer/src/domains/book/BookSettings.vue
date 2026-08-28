@@ -10,6 +10,8 @@ import {
   Feather,
   AlertTriangle
 } from 'lucide-vue-next'
+import { useChaptersStore } from '@/stores/chapters'
+import type { NumberingStyle } from '@shared/numbering'
 import { useBooksStore } from '@/stores/books'
 import { assetUrl } from '@/lib/assets'
 import type { Book, BookStatus } from '@shared/types'
@@ -17,6 +19,7 @@ import type { Book, BookStatus } from '@shared/types'
 const route = useRoute()
 const router = useRouter()
 const store = useBooksStore()
+const chapters = useChaptersStore()
 
 const id = Number(route.params.id)
 const loaded = ref(false)
@@ -248,6 +251,66 @@ async function archiveBook(): Promise<void> {
           <option v-for="l in LANGUAGES" :key="l" :value="l" />
         </datalist>
         <p class="mt-1 text-xs text-ink-dim">Written into EPUB metadata.</p>
+
+        <div class="mt-6 border-t border-border pt-5">
+          <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink-dim">
+            Chapter numbering
+          </label>
+          <p class="mb-2 text-xs text-ink-dim">
+            Numbers are worked out from each chapter's position, so inserting one renumbers
+            everything after it. Your titles keep only the words you wrote.
+          </p>
+          <select
+            class="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent-line"
+            :value="chapters.numberingStyle"
+            @change="chapters.setNumberingStyle(($event.target as HTMLSelectElement).value as NumberingStyle)"
+          >
+            <option value="off">Off — titles exactly as written</option>
+            <option value="chapter">Chapter 1 — Title</option>
+            <option value="number">1 — Title</option>
+            <option value="roman">I — Title</option>
+          </select>
+
+          <template v-if="chapters.numberingStyle !== 'off' && chapters.volumes.length">
+            <p class="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider text-ink-dim">
+              Volumes in the count
+            </p>
+            <div
+              v-for="v in chapters.volumes"
+              :key="v.id"
+              class="mb-1 flex items-center gap-2 rounded-lg bg-surface-2 px-2 py-1.5"
+            >
+              <input
+                type="checkbox"
+                class="h-3.5 w-3.5 shrink-0"
+                style="accent-color: var(--color-accent)"
+                :checked="(v.numbered ?? 1) === 1"
+                :title="`Count ${v.title} in the chapter numbering`"
+                @change="
+                  chapters.setVolumeNumbering(
+                    v.id,
+                    ($event.target as HTMLInputElement).checked,
+                    v.unnumbered_label ?? ''
+                  )
+                "
+              />
+              <span class="min-w-0 flex-1 truncate text-sm">{{ v.title }}</span>
+              <input
+                v-if="(v.numbered ?? 1) === 0"
+                :value="v.unnumbered_label ?? ''"
+                placeholder="Label, e.g. Interlude"
+                class="w-36 shrink-0 rounded border border-border bg-surface px-2 py-1 text-xs outline-none focus:border-accent-line"
+                @change="
+                  chapters.setVolumeNumbering(v.id, false, ($event.target as HTMLInputElement).value)
+                "
+              />
+            </div>
+            <p class="mt-1 text-xs text-ink-dim">
+              Unticked volumes sit outside the count. Give one a label to number it separately
+              (Interlude 1, Interlude 2), or leave it blank for no number at all.
+            </p>
+          </template>
+        </div>
       </div>
 
       <!-- DANGER ZONE -->

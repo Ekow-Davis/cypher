@@ -30,6 +30,21 @@ export function createVolume(bookId: number, title?: string): Volume {
   return getVolume(Number(info.lastInsertRowid)) as Volume
 }
 
+/**
+ * Sets whether a volume's chapters take part in the running chapter count.
+ * A label lets an excluded volume keep its own sequence (Interlude 1, 2…)
+ * instead of showing no number at all.
+ */
+export function setVolumeNumbering(
+  id: number,
+  numbered: boolean,
+  unnumberedLabel: string
+): void {
+  getDb()
+    .prepare('UPDATE volumes SET numbered = ?, unnumbered_label = ? WHERE id = ?')
+    .run(numbered ? 1 : 0, unnumberedLabel.trim(), id)
+}
+
 export function renameVolume(id: number, title: string): Volume | null {
   getDb().prepare('UPDATE volumes SET title = ? WHERE id = ?').run(title.trim() || 'Untitled', id)
   return getVolume(id)

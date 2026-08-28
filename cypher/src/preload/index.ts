@@ -119,6 +119,8 @@ const cypher = {
 
   volumes: {
     list: (bookId: number): Promise<Volume[]> => ipcRenderer.invoke('volumes:list', bookId),
+    setNumbering: (id: number, numbered: boolean, label: string): Promise<void> =>
+      ipcRenderer.invoke('volumes:setNumbering', id, numbered, label),
     create: (bookId: number, title?: string): Promise<Volume> =>
       ipcRenderer.invoke('volumes:create', bookId, title),
     rename: (id: number, title: string): Promise<Volume | null> =>

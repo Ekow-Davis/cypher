@@ -142,7 +142,12 @@ async function run(): Promise<void> {
       return
     }
     if (res.error) error.value = res.error
-    else done.value = `Exported ${res.chapters} chapter(s) to ${res.path}`
+    else {
+      done.value = `Exported ${res.chapters} chapter(s) to ${res.path}`
+      // Close on its own once the writer has had a moment to see where it
+      // landed — an export that succeeded needs no further decision from them.
+      setTimeout(() => emit('close'), 1400)
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {

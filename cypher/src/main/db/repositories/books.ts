@@ -16,7 +16,8 @@ const UPDATABLE = [
   'status',
   'cover_path',
   'author',
-  'language'
+  'language',
+  'numbering_style'
 ] as const
 
 export function listBooks(includeArchived = false): Book[] {
