@@ -35,6 +35,10 @@ publish:
   repo: cypher
 
 nsis:
+  # No spaces: GitHub silently rewrites spaces in release asset filenames to
+  # dots, which leaves the name in latest.yml pointing at a file that doesn't
+  # exist and breaks every auto-update with a 404.
+  artifactName: ${productName}-Setup-${version}.${ext}
   # Required for differential updates to work at all.
   differentialPackage: true
   installerIcon: build/icon.ico
