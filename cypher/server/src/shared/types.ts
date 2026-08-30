@@ -1,8 +1,10 @@
+import type { NumberingStyle } from './numbering'
 /** Types shared across the main process and the renderer. */
 
 export type BookStatus = 'draft' | 'ongoing' | 'complete'
 
 export interface Book {
+  numbering_style?: NumberingStyle
   id: number
   title: string
   subtitle: string | null
@@ -22,6 +24,7 @@ export interface CreateBookInput {
 }
 
 export interface UpdateBookInput {
+  numbering_style?: NumberingStyle
   title?: string
   subtitle?: string | null
   synopsis?: string | null
@@ -55,6 +58,8 @@ export interface UpdateChapterMetaInput {
 }
 
 export interface Volume {
+  numbered?: number
+  unnumbered_label?: string
   id: number
   book_id: number
   title: string
@@ -407,4 +412,16 @@ export interface ManuscriptImport {
   chapters: DetectedChapter[]
   fileName: string
   totalWords: number
+}
+
+export interface ImportedCharacter {
+  name: string
+  sheet: CharacterSheet
+  filled: number
+}
+
+export interface CharacterImportResult {
+  fileName: string
+  characters: ImportedCharacter[]
+  unknownLabels: string[]
 }
