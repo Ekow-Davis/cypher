@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, watch, nextTick } from 'vue'
+import { ref, reactive, watch, nextTick, onMounted } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import {
   Plus,
@@ -105,6 +105,26 @@ async function confirmDeleteVolume(): Promise<void> {
   }
   volumeToDelete.value = null
 }
+
+/**
+ * Brings the open chapter into view.
+ *
+ * On a long book the restored chapter is usually far below the fold, so
+ * without this the list reopens at the top and the writer has to hunt for
+ * where they were — which is the whole problem the restore is meant to solve.
+ */
+function revealActive(): void {
+  const id = store.activeId
+  if (id == null) return
+  void nextTick(() => {
+    const el = document.querySelector(`[data-chapter-id="${id}"]`)
+    el?.scrollIntoView({ block: 'center' })
+  })
+}
+
+onMounted(revealActive)
+// Loading a different book replaces the list, so re-reveal once it arrives.
+watch(() => store.bookId, revealActive)
 </script>
 
 <template>
@@ -214,6 +234,7 @@ async function confirmDeleteVolume(): Promise<void> {
           <div
             v-for="(ch, i) in g.items"
             :key="ch.id"
+            :data-chapter-id="ch.id"
             class="group/row mx-2 mb-1 flex cursor-pointer items-center gap-1 rounded-lg px-2 py-2 transition-colors"
             :class="
               store.activeId === ch.id
@@ -268,6 +289,7 @@ async function confirmDeleteVolume(): Promise<void> {
           <div
             v-for="(ch, i) in unsorted"
             :key="ch.id"
+            :data-chapter-id="ch.id"
             class="group/row mx-2 mb-1 flex cursor-pointer items-center gap-1 rounded-lg px-3 py-2 transition-colors"
             :class="
               store.activeId === ch.id

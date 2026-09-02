@@ -80,6 +80,8 @@ const cypher = {
     list: (includeArchived?: boolean): Promise<Book[]> =>
       ipcRenderer.invoke('books:list', includeArchived),
     get: (id: number): Promise<Book | null> => ipcRenderer.invoke('books:get', id),
+    setLastChapter: (bookId: number, chapterId: number | null): Promise<void> =>
+      ipcRenderer.invoke('books:setLastChapter', bookId, chapterId),
     create: (input: CreateBookInput): Promise<Book> => ipcRenderer.invoke('books:create', input),
     update: (id: number, patch: UpdateBookInput): Promise<Book | null> =>
       ipcRenderer.invoke('books:update', id, patch),

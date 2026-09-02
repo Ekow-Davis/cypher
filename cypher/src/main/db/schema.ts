@@ -438,3 +438,12 @@ export function migration019(db: Database): void {
     );
   `)
 }
+
+/**
+ * Migration 020 — remember where the writer left off.
+ * Opening a 200-chapter book at chapter 1 means scrolling to find your place
+ * every time; this stores the chapter last worked on so the book reopens there.
+ */
+export function migration020(db: Database): void {
+  db.exec(`ALTER TABLE books ADD COLUMN last_chapter_id INTEGER;`)
+}

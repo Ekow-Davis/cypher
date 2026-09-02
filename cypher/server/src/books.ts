@@ -93,6 +93,18 @@ export async function initBookSchema(): Promise<void> {
 
     -- Collaborators land in Phase 3; the table exists now so access checks have
     -- one place to look from the start.
+    -- Yjs updates for chapter bodies. Appended, never overwritten: each update
+    -- is a fragment other writers merge, and the order they arrive in does not
+    -- matter. That property is what removes conflicts entirely for prose.
+    CREATE TABLE IF NOT EXISTS chapter_updates (
+      id         BIGSERIAL PRIMARY KEY,
+      chapter_id UUID NOT NULL,
+      book_id    UUID NOT NULL REFERENCES online_books(id) ON DELETE CASCADE,
+      update_b64 TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_chapter_updates ON chapter_updates(chapter_id, id);
+
     CREATE TABLE IF NOT EXISTS book_collaborators (
       book_id  UUID NOT NULL REFERENCES online_books(id) ON DELETE CASCADE,
       user_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -288,4 +300,96 @@ export async function listBooksFor(userId: string): Promise<
 /** Removes the book entirely — owner only, used when taking a book offline. */
 export async function deleteOnlineBook(bookId: string): Promise<void> {
   await pool.query('DELETE FROM online_books WHERE id = $1', [bookId])
+}
+
+
+/* ---------------- collaborators ---------------- */
+
+export async function addCollaborator(bookId: string, userId: string): Promise<void> {
+  await pool.query(
+    'INSERT INTO book_collaborators (book_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [bookId, userId]
+  )
+}
+
+export async function removeCollaborator(bookId: string, userId: string): Promise<void> {
+  await pool.query('DELETE FROM book_collaborators WHERE book_id = $1 AND user_id = $2', [
+    bookId,
+    userId
+  ])
+}
+
+export async function listCollaborators(
+  bookId: string
+): Promise<{ id: string; displayName: string; isOwner: boolean }[]> {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.display_name, TRUE AS is_owner
+       FROM online_books b JOIN users u ON u.id = b.owner_id WHERE b.id = $1
+     UNION ALL
+     SELECT u.id, u.display_name, FALSE AS is_owner
+       FROM book_collaborators c JOIN users u ON u.id = c.user_id WHERE c.book_id = $1`,
+    [bookId]
+  )
+  return rows.map((r) => ({ id: r.id, displayName: r.display_name, isOwner: r.is_owner }))
+}
+
+/* ---------------- collaborative chapter bodies ---------------- */
+
+/**
+ * Stores a Yjs update.
+ *
+ * Updates accumulate rather than replacing one another: merging them in any
+ * order produces the same document, which is what lets two writers edit the
+ * same chapter — even both offline — without anyone choosing a winner.
+ */
+export async function appendChapterUpdate(
+  bookId: string,
+  chapterId: string,
+  updateB64: string
+): Promise<{ id: number }> {
+  const { rows } = await pool.query(
+    'INSERT INTO chapter_updates (chapter_id, book_id, update_b64) VALUES ($1, $2, $3) RETURNING id',
+    [chapterId, bookId, updateB64]
+  )
+  return { id: Number(rows[0].id) }
+}
+
+export async function chapterUpdatesSince(
+  chapterId: string,
+  since: number
+): Promise<{ id: number; update_b64: string }[]> {
+  const { rows } = await pool.query(
+    'SELECT id, update_b64 FROM chapter_updates WHERE chapter_id = $1 AND id > $2 ORDER BY id',
+    [chapterId, since]
+  )
+  return rows.map((r) => ({ id: Number(r.id), update_b64: r.update_b64 }))
+}
+
+/**
+ * Replaces a chapter's update log with one merged update.
+ *
+ * Without this the log grows forever — every keystroke session adds rows. The
+ * caller sends a single update representing the whole document, so history is
+ * compacted without changing what the document says.
+ */
+export async function compactChapterUpdates(
+  bookId: string,
+  chapterId: string,
+  mergedB64: string
+): Promise<void> {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query('DELETE FROM chapter_updates WHERE chapter_id = $1', [chapterId])
+    await client.query(
+      'INSERT INTO chapter_updates (chapter_id, book_id, update_b64) VALUES ($1, $2, $3)',
+      [chapterId, bookId, mergedB64]
+    )
+    await client.query('COMMIT')
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }

@@ -18,7 +18,8 @@ import {
   migration016,
   migration017,
   migration018,
-  migration019
+  migration019,
+  migration020
 } from './schema'
 
 interface Migration {
@@ -50,7 +51,8 @@ const MIGRATIONS: Migration[] = [
   { version: 16, up: migration016 },
   { version: 17, up: migration017 },
   { version: 18, up: migration018 },
-  { version: 19, up: migration019 }
+  { version: 19, up: migration019 },
+  { version: 20, up: migration020 }
 ]
 
 export function runMigrations(db: Database): void {

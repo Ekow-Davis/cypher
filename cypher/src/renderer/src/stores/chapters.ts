@@ -29,7 +29,13 @@ export const useChaptersStore = defineStore('chapters', () => {
     // The book carries its own numbering preference, so reopening it looks the
     // same as when it was left.
     numberingStyle.value = (book?.numbering_style as NumberingStyle) ?? 'off'
-    activeId.value = chs[0]?.id ?? null
+
+    // Reopen where the writer left off. Falling back to the first chapter
+    // matters: the remembered one may have been deleted, or deleted by a
+    // co-writer since.
+    const remembered = (book as { last_chapter_id?: number | null })?.last_chapter_id ?? null
+    const stillExists = remembered != null && chs.some((c) => c.id === remembered)
+    activeId.value = stillExists ? remembered : (chs[0]?.id ?? null)
   }
 
   // ----- chapters -----
@@ -144,8 +150,14 @@ export const useChaptersStore = defineStore('chapters', () => {
     }
   }
 
+  /** Remembers the chapter so the book reopens here next time. */
+  function rememberActive(id: number | null): void {
+    if (bookId.value != null) void window.cypher.books.setLastChapter(bookId.value, id)
+  }
+
   function setActive(id: number): void {
     activeId.value = id
+    rememberActive(id)
   }
 
   /**
@@ -253,6 +265,7 @@ export const useChaptersStore = defineStore('chapters', () => {
     remove,
     applyOrder,
     setActive,
+    rememberActive,
     addVolume,
     renameVolume,
     deleteVolume,

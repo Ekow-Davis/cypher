@@ -9,6 +9,8 @@ import {
   updateBook,
   archiveBook,
   deleteBook
+,
+  setLastChapter
 } from './db/repositories/books'
 import {
   listChapters,
@@ -618,6 +620,9 @@ export function registerIpcHandlers(): void {
   handle('diary:monthGroups', (_e, diaryId: number | null) => listMonthGroups(diaryId))
 
   // Online books
+  handle('books:setLastChapter', (_e, bookId: number, chapterId: number | null) =>
+    setLastChapter(bookId, chapterId)
+  )
   handle('books:makeOnline', (_e, bookId: number) => makeBookOnline(bookId))
   handle('books:takeOffline', (_e, bookId: number) => takeBookOffline(bookId))
   handle('books:onlineInfo', (_e, bookId: number) => onlineInfo(bookId))

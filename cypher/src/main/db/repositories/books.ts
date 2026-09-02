@@ -39,6 +39,15 @@ export function createBook(input: CreateBookInput): Book {
   return getBook(Number(info.lastInsertRowid)) as Book
 }
 
+/**
+ * Records the chapter last opened. Written directly rather than through
+ * updateBook so it never marks the book dirty — where someone was reading is
+ * their own business and has no place in a co-writer's sync.
+ */
+export function setLastChapter(bookId: number, chapterId: number | null): void {
+  getDb().prepare('UPDATE books SET last_chapter_id = ? WHERE id = ?').run(chapterId, bookId)
+}
+
 export function updateBook(id: number, patch: UpdateBookInput): Book | null {
   const keys = Object.keys(patch).filter((k) =>
     (UPDATABLE as readonly string[]).includes(k)

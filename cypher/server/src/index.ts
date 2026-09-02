@@ -37,6 +37,12 @@ import {
   createOnlineBook,
   listBooksFor,
   deleteOnlineBook,
+  addCollaborator,
+  removeCollaborator,
+  listCollaborators,
+  appendChapterUpdate,
+  chapterUpdatesSince,
+  compactChapterUpdates,
   type PushPayload
 } from './books.js'
 
@@ -360,6 +366,100 @@ app.post<{ Params: { id: string }; Body: PushPayload }>(
     return pushChanges(request.params.id, request.body ?? {})
   }
 )
+
+/* ---------------- collaborators ---------------- */
+
+app.get<{ Params: { id: string } }>('/api/books/:id/collaborators', async (request, reply) => {
+  const user = await requireUser(request, reply)
+  if (!user) return
+  if (!(await canAccess(request.params.id, user.id))) {
+    return reply.code(403).send({ error: 'You do not have access to that book.' })
+  }
+  return { collaborators: await listCollaborators(request.params.id) }
+})
+
+/** Adding someone needs their writer ID *and* join code — owner only. */
+app.post<{ Params: { id: string }; Body: { userId?: string; joinCode?: string } }>(
+  '/api/books/:id/collaborators',
+  async (request, reply) => {
+    const user = await requireUser(request, reply)
+    if (!user) return
+    if (!(await isOwner(request.params.id, user.id))) {
+      return reply.code(403).send({ error: 'Only the book owner can add someone.' })
+    }
+    const target = await verifyJoinCredentials(
+      request.body?.userId ?? '',
+      request.body?.joinCode ?? ''
+    )
+    if (!target) {
+      return reply.code(404).send({ error: 'No writer found with that ID and join code.' })
+    }
+    if (target.id === user.id) {
+      return reply.code(400).send({ error: 'That is your own account.' })
+    }
+    await addCollaborator(request.params.id, target.id)
+    return { ok: true, id: target.id, displayName: target.display_name }
+  }
+)
+
+/**
+ * Removing a collaborator. The owner can remove anyone; a collaborator can
+ * remove themselves, which is how leaving a book works.
+ */
+app.delete<{ Params: { id: string; userId: string } }>(
+  '/api/books/:id/collaborators/:userId',
+  async (request, reply) => {
+    const user = await requireUser(request, reply)
+    if (!user) return
+    const owner = await isOwner(request.params.id, user.id)
+    if (!owner && request.params.userId !== user.id) {
+      return reply.code(403).send({ error: 'You can only remove yourself.' })
+    }
+    if (owner && request.params.userId === user.id) {
+      return reply.code(400).send({ error: 'The owner cannot leave their own book.' })
+    }
+    await removeCollaborator(request.params.id, request.params.userId)
+    return { ok: true }
+  }
+)
+
+/* ---------------- collaborative chapter bodies ---------------- */
+
+app.get<{ Params: { id: string; chapterId: string }; Querystring: { since?: string } }>(
+  '/api/books/:id/chapters/:chapterId/updates',
+  async (request, reply) => {
+    const user = await requireUser(request, reply)
+    if (!user) return
+    if (!(await canAccess(request.params.id, user.id))) {
+      return reply.code(403).send({ error: 'You do not have access to that book.' })
+    }
+    const since = Number(request.query?.since ?? 0)
+    const updates = await chapterUpdatesSince(
+      request.params.chapterId,
+      Number.isFinite(since) ? since : 0
+    )
+    return { updates }
+  }
+)
+
+app.post<{
+  Params: { id: string; chapterId: string }
+  Body: { update?: string; compact?: boolean }
+}>('/api/books/:id/chapters/:chapterId/updates', async (request, reply) => {
+  const user = await requireUser(request, reply)
+  if (!user) return
+  if (!(await canAccess(request.params.id, user.id))) {
+    return reply.code(403).send({ error: 'You do not have access to that book.' })
+  }
+  const update = request.body?.update
+  if (!update) return reply.code(400).send({ error: 'An update is required.' })
+
+  if (request.body?.compact) {
+    await compactChapterUpdates(request.params.id, request.params.chapterId, update)
+    return { ok: true, compacted: true }
+  }
+  return appendChapterUpdate(request.params.id, request.params.chapterId, update)
+})
 
 /** Taking a book offline removes it from the server entirely. Owner only. */
 app.delete<{ Params: { id: string } }>('/api/books/:id', async (request, reply) => {
