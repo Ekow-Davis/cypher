@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { ref, reactive, watch, nextTick, onBeforeUnmount, type Component } from 'vue'
+import { ref, reactive, watch, nextTick, onMounted, onBeforeUnmount, type Component } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import { FindReplace, findKey, findMatches } from '@/lib/findReplace'
+import Collaboration from '@tiptap/extension-collaboration'
+import * as Y from 'yjs'
+import { toJSON, type CollabSession } from '@/lib/collab'
+import CollaborationCaret from '@tiptap/extension-collaboration-caret'
+import { connectChapter, colorFor, type CollabConnection, type ConnectionState } from '@/lib/collabSocket'
+import { Awareness } from 'y-protocols/awareness'
 import { applyCase, type CaseMode } from '@/lib/textCase'
 import { createCharacterMention, mentionClickHandler } from '@/lib/characterMention'
 import { useBookUiStore } from '@/stores/bookUi'
@@ -23,7 +29,11 @@ import {
 import { useChaptersStore } from '@/stores/chapters'
 import type { Chapter } from '@shared/types'
 
-const props = defineProps<{ chapter: Chapter | null }>()
+const props = defineProps<{
+  chapter: Chapter | null
+  /** Present only for books that are online; enables shared editing. */
+  collab?: { bookRemoteId: string; chapterRemoteId: string } | null
+}>()
 const store = useChaptersStore()
 const bookUi = useBookUiStore()
 const prefs = usePreferencesStore()
@@ -38,8 +48,42 @@ let loadedId: number | null = null // which chapter is currently in the editor
 let loadingContent = false // suppress autosave while we set content programmatically
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * Shared editing, when the chapter belongs to an online book.
+ *
+ * The document is created before the editor so Collaboration can bind to it;
+ * its contents arrive from the server a moment later, which the extension
+ * handles as an ordinary update. Undo history is handed to Yjs because
+ * StarterKit's own history would let one writer undo the other's typing.
+ */
+const collabDoc = props.collab ? new Y.Doc() : null
+
+/**
+ * Awareness is created up front, empty.
+ *
+ * CollaborationCaret binds to it when the editor is built, but the socket that
+ * fills it needs an auth token fetched over IPC. Creating it here and handing
+ * the same object to the socket later avoids making the whole component async
+ * for the sake of one lookup.
+ */
+const awareness = collabDoc ? new Awareness(collabDoc) : null
+let collabSession: CollabSession | null = null
+let collabTimer: ReturnType<typeof setInterval> | null = null
+let connection: CollabConnection | null = null
+const liveState = ref<ConnectionState>('connecting')
+/** Other writers currently in this chapter. */
+const peers = ref<{ name: string; color: string }[]>([])
+
 const editor = useEditor({
-  extensions: [StarterKit, createCharacterMention(), FindReplace],
+  extensions: collabDoc
+    ? [
+        StarterKit.configure({ undoRedo: false }),
+        Collaboration.configure({ document: collabDoc, field: 'body' }),
+        CollaborationCaret.configure({ provider: { awareness } }),
+        createCharacterMention(),
+        FindReplace
+      ]
+    : [StarterKit, createCharacterMention(), FindReplace],
   content: '',
   editorProps: {
     attributes: { class: 'cypher-prose' },
@@ -275,6 +319,84 @@ function scheduleSave(): void {
   saveTimer = setTimeout(() => void saveNow(), prefs.autosaveMs)
 }
 
+/**
+ * Starts the shared session and keeps it in step.
+ *
+ * The local chapter row is still written on each sync so the book remains
+ * readable offline, exports keep working, and nothing is stranded if the book
+ * is later taken offline — the Y.Doc is the source of truth while online, not
+ * the only copy.
+ */
+async function startCollab(): Promise<void> {
+  const ed = editor.value
+  if (!props.collab || !collabDoc || !ed) return
+  let fallback: unknown = ''
+  if (props.chapter?.content) {
+    try {
+      fallback = JSON.parse(props.chapter.content)
+    } catch {
+      fallback = ''
+    }
+  }
+  const config = await window.cypher.collab.config()
+  const profile = (await window.cypher.account.profile()) as
+    | { id: string; displayName: string }
+    | null
+  if (!config || !awareness) return
+
+  connection = connectChapter({
+    baseUrl: config.baseUrl,
+    token: config.token,
+    bookRemoteId: props.collab.bookRemoteId,
+    chapterRemoteId: props.collab.chapterRemoteId,
+    doc: collabDoc,
+    awareness,
+    user: {
+      name: profile?.displayName ?? 'Someone',
+      color: colorFor(profile?.id ?? 'anon')
+    }
+  })
+  connection.onState((next) => (liveState.value = next))
+
+  // Who else is here, for the header.
+  awareness.on('change', () => {
+    const others: { name: string; color: string }[] = []
+    awareness.getStates().forEach((state, clientId) => {
+      if (clientId === collabDoc.clientID) return
+      const user = (state as { user?: { name: string; color: string } }).user
+      if (user) others.push(user)
+    })
+    peers.value = others
+  })
+
+  // The shared document is authoritative while connected; a local copy is
+  // still written so the chapter survives going offline.
+  collabSession = { doc: collabDoc, fragment: collabDoc.getXmlFragment('body'), lastId: 0, destroy: () => undefined }
+  if (fallback && collabDoc.getXmlFragment('body').length === 0) {
+    // Seeding only when the shared document is genuinely empty — otherwise
+    // every writer who opens the chapter would append their own copy.
+    const { prosemirrorJSONToYXmlFragment } = await import('y-prosemirror')
+    try {
+      prosemirrorJSONToYXmlFragment(ed.schema as never, fallback as never, collabDoc.getXmlFragment('body') as never)
+    } catch {
+      /* stored content unreadable — start from what the server has */
+    }
+  }
+
+  collabTimer = setInterval(() => void pushCollab(), 15_000)
+}
+
+/** Keeps a readable local copy; sharing itself happens over the socket. */
+async function pushCollab(): Promise<void> {
+  if (!collabSession || !props.collab || loadedId == null) return
+  const json = toJSON(collabSession)
+  if (json) {
+    const text = editor.value?.getText().trim() ?? ''
+    await store.saveContent(loadedId, JSON.stringify(json), text ? text.split(/\s+/).length : 0)
+  }
+  status.value = 'saved'
+}
+
 async function saveNow(): Promise<void> {
   if (loadedId == null || !editor.value) return
   if (saveTimer) {
@@ -307,7 +429,10 @@ function loadChapter(ch: Chapter | null): void {
       content = ch.content
     }
   }
-  ed.commands.setContent(content as never)
+  // With collaboration on, the document's contents come from the shared Y.Doc.
+  // Calling setContent here would overwrite everyone's text with this
+  // machine's stale copy.
+  if (!collabDoc) ed.commands.setContent(content as never)
   status.value = 'saved'
   loadingContent = false
 }
@@ -346,7 +471,15 @@ watch(
   { immediate: true }
 )
 
+onMounted(() => void startCollab())
+
 onBeforeUnmount(() => {
+  if (collabTimer) clearInterval(collabTimer)
+  // One last exchange so the final keystrokes aren't left on this machine.
+  if (collabSession) void pushCollab()
+  connection?.destroy()
+  collabSession?.destroy()
+  collabDoc?.destroy()
   if (saveTimer) clearTimeout(saveTimer)
   if (metaTimer) clearTimeout(metaTimer)
 })
@@ -403,6 +536,36 @@ const tools: Tool[] = [
       >
         <Info :size="15" />
       </button>
+      <!-- who else is in this chapter -->
+      <div v-if="props.collab" class="flex shrink-0 items-center gap-1.5">
+        <span
+          v-for="(peer, i) in peers"
+          :key="i"
+          class="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-black/80"
+          :style="{ background: peer.color }"
+          :title="`${peer.name} is here`"
+        >
+          {{ peer.name.slice(0, 2).toUpperCase() }}
+        </span>
+        <span
+          class="h-2 w-2 shrink-0 rounded-full"
+          :class="
+            liveState === 'live'
+              ? 'bg-emerald-400'
+              : liveState === 'connecting'
+                ? 'bg-amber-400'
+                : 'bg-red-400'
+          "
+          :title="
+            liveState === 'live'
+              ? 'Connected — changes appear as they are typed'
+              : liveState === 'connecting'
+                ? 'Connecting…'
+                : 'Offline — your work is saved here and will sync when you reconnect'
+          "
+        />
+      </div>
+
       <span class="shrink-0 text-xs text-ink-dim">{{
         status === 'saved' ? 'Saved' : status === 'saving' ? 'Saving…' : 'Unsaved'
       }}</span>

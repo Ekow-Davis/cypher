@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import CollaboratorsPanel from './CollaboratorsPanel.vue'
 import {
   Cloud,
   CloudOff,
@@ -177,4 +178,11 @@ onBeforeUnmount(() => stop?.())
       </p>
     </template>
   </div>
+
+  <CollaboratorsPanel
+    v-if="info.online"
+    :book-id="props.bookId"
+    :is-owner="info.isOwner"
+    class="mt-6"
+  />
 </template>

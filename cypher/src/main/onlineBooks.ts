@@ -147,3 +147,112 @@ export function onlineInfo(bookId: number): OnlineInfo {
     lastSyncedAt: book?.last_synced_at ?? null
   }
 }
+
+
+/**
+ * What the renderer needs to talk to the collaboration API directly.
+ *
+ * The token stays in main; only a short-lived copy crosses to the renderer,
+ * and only when online features are on — the renderer never reads the keychain.
+ */
+export function collabConfig(): { baseUrl: string; token: string } | null {
+  if (!onlineEnabled()) return null
+  const token = readToken()
+  const base = serverUrl()
+  if (!token || !base) return null
+  return { baseUrl: base, token }
+}
+
+/** The book's server-side id, in the UUID form the API expects. */
+export function bookRemoteId(bookId: number): string | null {
+  const row = getDb().prepare('SELECT remote_id FROM books WHERE id = ?').get(bookId) as
+    | { remote_id: string | null }
+    | undefined
+  if (!row?.remote_id) return null
+  const hex = row.remote_id
+  return hex.includes('-')
+    ? hex
+    : `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
+}
+
+export function chapterRemoteId(chapterId: number): string | null {
+  const row = getDb().prepare('SELECT remote_id FROM chapters WHERE id = ?').get(chapterId) as
+    | { remote_id: string | null }
+    | undefined
+  if (!row?.remote_id) return null
+  const hex = row.remote_id
+  return hex.includes('-')
+    ? hex
+    : `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
+}
+
+/* ---------------- collaborators ---------------- */
+
+export interface Collaborator {
+  id: string
+  displayName: string
+  isOwner: boolean
+}
+
+export async function listCollaborators(bookId: number): Promise<Collaborator[]> {
+  const config = collabConfig()
+  const remote = bookRemoteId(bookId)
+  if (!config || !remote) return []
+  try {
+    const response = await fetch(`${config.baseUrl}/api/books/${remote}/collaborators`, {
+      headers: { Authorization: `Bearer ${config.token}` }
+    })
+    if (!response.ok) return []
+    const data = (await response.json()) as { collaborators: Collaborator[] }
+    return data.collaborators ?? []
+  } catch {
+    return []
+  }
+}
+
+export async function addCollaborator(
+  bookId: number,
+  userId: string,
+  joinCode: string
+): Promise<{ ok: boolean; displayName?: string; reason?: string }> {
+  const config = collabConfig()
+  const remote = bookRemoteId(bookId)
+  if (!config || !remote) return { ok: false, reason: 'This book is not online.' }
+  try {
+    const response = await fetch(`${config.baseUrl}/api/books/${remote}/collaborators`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.token}` },
+      body: JSON.stringify({ userId: userId.trim(), joinCode: joinCode.trim() })
+    })
+    const body = (await response.json().catch(() => ({}))) as {
+      displayName?: string
+      error?: string
+    }
+    if (!response.ok) return { ok: false, reason: body.error ?? 'Could not add that writer.' }
+    return { ok: true, displayName: body.displayName }
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+export async function removeCollaborator(
+  bookId: number,
+  userId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  const config = collabConfig()
+  const remote = bookRemoteId(bookId)
+  if (!config || !remote) return { ok: false, reason: 'This book is not online.' }
+  try {
+    const response = await fetch(
+      `${config.baseUrl}/api/books/${remote}/collaborators/${userId}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } }
+    )
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as { error?: string }
+      return { ok: false, reason: body.error ?? 'Could not remove that writer.' }
+    }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) }
+  }
+}

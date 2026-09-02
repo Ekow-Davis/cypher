@@ -1,4 +1,4 @@
-import type { NumberingStyle } from './numbering'
+import type { NumberingStyle } from './numbering.js'
 /** Types shared across the main process and the renderer. */
 
 export type BookStatus = 'draft' | 'ongoing' | 'complete'

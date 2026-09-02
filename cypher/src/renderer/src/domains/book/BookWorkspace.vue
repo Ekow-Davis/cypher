@@ -56,6 +56,37 @@ const showExport = ref(false)
 const showSectionExport = ref<'lore' | 'characters' | null>(null)
 const showShare = ref(false)
 const showImport = ref(false)
+
+/**
+ * Identifiers the chapter editor needs for shared editing.
+ *
+ * Resolved here because the editor must know before it is created — the
+ * collaboration binding cannot be attached to an editor after the fact.
+ */
+const collab = ref<{ bookRemoteId: string; chapterRemoteId: string } | null>(null)
+
+async function refreshCollab(): Promise<void> {
+  const bookId = Number(route.params.id)
+  const chapterId = chapters.activeId
+  if (!bookId || chapterId == null) {
+    collab.value = null
+    return
+  }
+  const info = await window.cypher.onlineBooks.info(bookId)
+  if (!info.online) {
+    collab.value = null
+    return
+  }
+  const [bookRemoteId, chapterRemoteId] = await Promise.all([
+    window.cypher.collab.bookRemoteId(bookId),
+    window.cypher.collab.chapterRemoteId(chapterId)
+  ])
+  collab.value = bookRemoteId && chapterRemoteId ? { bookRemoteId, chapterRemoteId } : null
+}
+
+// A different chapter means a different shared document, so this re-resolves
+// on every switch — and the key below forces the editor to rebuild with it.
+watch(() => [route.params.id, chapters.activeId], () => void refreshCollab(), { immediate: true })
 const windowNotice = ref<string | null>(null)
 const showChapters = ref(true)
 
@@ -246,7 +277,12 @@ onMounted(async () => {
         :class="isTight ? 'cypher-drawer absolute inset-y-0 left-0 z-30 shadow-2xl' : ''"
       />
       <main class="min-w-0 flex-1 overflow-hidden">
-        <ChapterEditor v-if="chapters.active" :chapter="chapters.active" />
+        <ChapterEditor
+          v-if="chapters.active"
+          :key="collab ? `collab-${chapters.active.id}` : 'solo'"
+          :chapter="chapters.active"
+          :collab="collab"
+        />
         <div v-else class="flex h-full items-center justify-center text-ink-dim">
           No chapter selected.
         </div>

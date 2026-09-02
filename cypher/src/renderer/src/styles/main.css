@@ -559,3 +559,35 @@ body {
   background: var(--color-surface);
   backdrop-filter: none;
 }
+
+/* ---------- Collaborative carets ---------- */
+.collaboration-carets__caret {
+  position: relative;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  word-break: normal;
+}
+/* The name only appears on hover — a label sitting over the text permanently
+   is more distracting than the caret it explains. */
+.collaboration-carets__label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  border-radius: 4px 4px 4px 0;
+  padding: 0.1rem 0.35rem;
+  font-family: system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: normal;
+  color: #1a1030;
+  white-space: nowrap;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.collaboration-carets__caret:hover .collaboration-carets__label {
+  opacity: 1;
+}

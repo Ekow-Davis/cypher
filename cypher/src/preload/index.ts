@@ -347,6 +347,27 @@ const cypher = {
       ipcRenderer.invoke('diary:monthGroups', diaryId)
   },
 
+  collab: {
+    config: (): Promise<{ baseUrl: string; token: string } | null> =>
+      ipcRenderer.invoke('collab:config'),
+    bookRemoteId: (bookId: number): Promise<string | null> =>
+      ipcRenderer.invoke('collab:bookRemoteId', bookId),
+    chapterRemoteId: (chapterId: number): Promise<string | null> =>
+      ipcRenderer.invoke('collab:chapterRemoteId', chapterId),
+    list: (
+      bookId: number
+    ): Promise<{ id: string; displayName: string; isOwner: boolean }[]> =>
+      ipcRenderer.invoke('collab:list', bookId),
+    add: (
+      bookId: number,
+      userId: string,
+      joinCode: string
+    ): Promise<{ ok: boolean; displayName?: string; reason?: string }> =>
+      ipcRenderer.invoke('collab:add', bookId, userId, joinCode),
+    remove: (bookId: number, userId: string): Promise<{ ok: boolean; reason?: string }> =>
+      ipcRenderer.invoke('collab:remove', bookId, userId)
+  },
+
   onlineBooks: {
     makeOnline: (bookId: number): Promise<{ ok: boolean; reason?: string }> =>
       ipcRenderer.invoke('books:makeOnline', bookId),

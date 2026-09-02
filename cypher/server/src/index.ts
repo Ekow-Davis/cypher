@@ -1,5 +1,7 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import websocket from '@fastify/websocket'
+import { handleConnection, flushAll } from './realtime.js'
 import { pool, initSchema, isReadable, type ShareRow } from './db.js'
 import { renderReaderHtml } from './shared/readerHtml.js'
 import type { ShareSnapshot } from './shared/types.js'
@@ -77,6 +79,7 @@ if (!PUBLISH_KEY) {
 
 const app = Fastify({ logger: true, bodyLimit: 25 * 1024 * 1024 })
 await app.register(cors, { origin: true })
+await app.register(websocket)
 
 /**
  * Fastify parses JSON out of the box but not form posts, so every HTML form on
@@ -461,6 +464,32 @@ app.post<{
   return appendChapterUpdate(request.params.id, request.params.chapterId, update)
 })
 
+/**
+ * Live editing socket.
+ *
+ * The token arrives as a query parameter because browsers cannot set headers
+ * on a WebSocket handshake; it is checked before the connection joins a room,
+ * so an unauthenticated socket never sees another writer's text.
+ */
+app.get<{ Params: { id: string; chapterId: string }; Querystring: { token?: string } }>(
+  '/ws/books/:id/chapters/:chapterId',
+  { websocket: true },
+  async (socket, request) => {
+    const user = await userForToken(request.query?.token)
+    if (!user || !(await canAccess(request.params.id, user.id))) {
+      socket.close()
+      return
+    }
+    await handleConnection(
+      socket as never,
+      request.params.id,
+      request.params.chapterId,
+      (handler) => socket.on('message', (data: Buffer) => handler(new Uint8Array(data))),
+      (handler) => socket.on('close', handler)
+    )
+  }
+)
+
 /** Taking a book offline removes it from the server entirely. Owner only. */
 app.delete<{ Params: { id: string } }>('/api/books/:id', async (request, reply) => {
   const user = await requireUser(request, reply)
@@ -629,6 +658,13 @@ function gonePage(hadExpiry: boolean): string {
     hadExpiry ? 'This link has expired' : 'This link was revoked',
     'Ask the author for a new one. <a href="/">About Cypher</a>'
   )
+}
+
+// Rooms hold unsaved work in memory, so a restart must flush before exiting.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    void flushAll().finally(() => process.exit(0))
+  })
 }
 
 app.listen({ port: PORT, host: '0.0.0.0' }).catch((err) => {

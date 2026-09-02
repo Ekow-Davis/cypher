@@ -56,7 +56,17 @@ import {
   isSpellcheckEnabled
 } from './contextMenu'
 import { lookupWord, thesaurusEnabled } from './thesaurus'
-import { makeBookOnline, takeBookOffline, onlineInfo } from './onlineBooks'
+import {
+  makeBookOnline,
+  takeBookOffline,
+  onlineInfo,
+  collabConfig,
+  bookRemoteId,
+  chapterRemoteId,
+  listCollaborators,
+  addCollaborator,
+  removeCollaborator
+} from './onlineBooks'
 import { syncBook, syncStatus } from './sync'
 import {
   onlineEnabled,
@@ -628,6 +638,18 @@ export function registerIpcHandlers(): void {
   handle('books:onlineInfo', (_e, bookId: number) => onlineInfo(bookId))
   handle('books:syncNow', (_e, bookId: number) => syncBook(bookId))
   handle('books:syncStatus', (_e, bookId: number) => syncStatus(bookId))
+
+  // Collaboration
+  handle('collab:config', () => collabConfig())
+  handle('collab:bookRemoteId', (_e, bookId: number) => bookRemoteId(bookId))
+  handle('collab:chapterRemoteId', (_e, chapterId: number) => chapterRemoteId(chapterId))
+  handle('collab:list', (_e, bookId: number) => listCollaborators(bookId))
+  handle('collab:add', (_e, bookId: number, userId: string, joinCode: string) =>
+    addCollaborator(bookId, userId, joinCode)
+  )
+  handle('collab:remove', (_e, bookId: number, userId: string) =>
+    removeCollaborator(bookId, userId)
+  )
 
   // Account — online features are opt-in, so every call here is inert until
   // the user turns them on.
