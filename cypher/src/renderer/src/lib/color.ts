@@ -50,3 +50,60 @@ export function deriveAccent(hex: string): { accent: string; strong: string; onA
   const accent = normalizeHex(hex)
   return { accent, strong: darken(accent, 0.14), onAccent: onColor(accent) }
 }
+
+
+export function lighten(hex: string, amount: number): string {
+  const { r, g, b } = toRgb(hex)
+  return toHex(r + (255 - r) * amount, g + (255 - g) * amount, b + (255 - b) * amount)
+}
+
+/** Blends two colours; `amount` is how much of `b` to mix in. */
+export function mix(a: string, b: string, amount: number): string {
+  const x = toRgb(a)
+  const y = toRgb(b)
+  return toHex(
+    x.r + (y.r - x.r) * amount,
+    x.g + (y.g - x.g) * amount,
+    x.b + (y.b - x.b) * amount
+  )
+}
+
+export interface SurfacePalette {
+  bg: string
+  surface: string
+  surface2: string
+  border: string
+  ink: string
+  inkDim: string
+}
+
+/**
+ * Builds a full set of surfaces from one base colour.
+ *
+ * Text is chosen from the background's measured luminance rather than from
+ * which mode is selected, so a pale pink "dark" theme still gets dark text and
+ * stays readable — picking by mode alone is what makes custom themes come out
+ * illegible.
+ */
+export function deriveSurfaces(baseHex: string, mode: 'light' | 'dark'): SurfacePalette {
+  const base = normalizeHex(baseHex)
+  const dark = mode === 'dark'
+
+  // Panels step away from the page colour so edges stay visible either way.
+  const bg = base
+  const surface = dark ? lighten(base, 0.06) : darken(base, 0.02)
+  const surface2 = dark ? lighten(base, 0.12) : darken(base, 0.06)
+  const border = dark ? lighten(base, 0.2) : darken(base, 0.12)
+
+  // Measured contrast, not assumed: a light background gets dark ink even when
+  // the user has called the theme "dark".
+  const light = luminance(bg) > 0.4
+  const ink = light ? '#14131a' : '#ece9f3'
+  // Dim text is the ink pulled toward the background — always legible, never
+  // a fixed grey that disappears on an unusual palette. Pale backgrounds get
+  // less blending: the same ratio that reads fine as light-on-dark drops below
+  // the 4.5:1 threshold when inverted.
+  const inkDim = mix(ink, bg, light ? 0.34 : 0.42)
+
+  return { bg, surface, surface2, border, ink, inkDim }
+}

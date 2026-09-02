@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { PALETTES } from '@/lib/palettes'
 import { Check, Database, Palette, PenLine, ShieldCheck, Info } from 'lucide-vue-next'
 import DataSafetyPanel from '@/components/DataSafetyPanel.vue'
 import ScriptFontPanel from '@/components/ScriptFontPanel.vue'
@@ -153,6 +154,64 @@ onMounted(async () => {
           {{ m.label }}
         </button>
       </div>
+
+      <!-- Palette: page and panel colours, set globally -->
+      <template v-if="!isDomain">
+        <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-dim">Palette</p>
+        <p class="mb-3 text-xs text-ink-dim">
+          The background and panel colours. Text adjusts itself to stay readable, whichever you
+          pick.
+        </p>
+        <div class="mb-6 flex flex-wrap gap-2">
+          <button
+            v-for="p in PALETTES"
+            :key="p.name"
+            class="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors"
+            :class="
+              theme.global.palette === p.name
+                ? 'border-accent-line bg-accent-soft text-ink'
+                : 'border-border text-ink-dim hover:text-ink'
+            "
+            @click="theme.setPalette(p.name)"
+          >
+            <span
+              class="h-5 w-5 shrink-0 rounded-md border border-border"
+              :style="{ background: theme.effectiveMode() === 'dark' ? p.dark : p.light }"
+            />
+            {{ p.label }}
+          </button>
+
+          <label
+            class="flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors"
+            :class="
+              theme.global.palette === 'custom'
+                ? 'border-accent-line bg-accent-soft text-ink'
+                : 'border-border text-ink-dim hover:text-ink'
+            "
+          >
+            <input
+              type="color"
+              class="h-5 w-5 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0"
+              :value="
+                theme.effectiveMode() === 'dark'
+                  ? theme.global.customDark
+                  : theme.global.customLight
+              "
+              @input="
+                theme.setCustomSurface(
+                  theme.effectiveMode(),
+                  ($event.target as HTMLInputElement).value
+                )
+              "
+            />
+            Custom
+          </label>
+        </div>
+        <p class="-mt-4 mb-6 text-xs text-ink-dim">
+          A custom colour sets the {{ theme.effectiveMode() }} background — switch modes to choose
+          the other one.
+        </p>
+      </template>
 
       <!-- Accent -->
       <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-dim">Accent</p>

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { reactive, ref, watch } from 'vue'
-import { deriveAccent } from '@/lib/color'
+import { deriveAccent, deriveSurfaces } from '@/lib/color'
+import { baseFor, type PaletteName } from '@/lib/palettes'
 
 export type Mode = 'light' | 'dark'
 export type AccentName = 'purple' | 'blue' | 'green' | 'teal' | 'slate' | 'custom'
@@ -28,6 +29,11 @@ interface GlobalTheme {
   mode: Mode
   accent: AccentName
   customHex: string | null
+  /** Surface palette — the page and panel colours, separate from the accent. */
+  palette: PaletteName
+  /** Base colours when palette is 'custom', kept per mode. */
+  customDark: string
+  customLight: string
 }
 interface DomainTheme {
   mode: Mode | null // null = inherit from global
@@ -42,7 +48,14 @@ function emptyDomain(): DomainTheme {
 }
 
 export const useThemeStore = defineStore('theme', () => {
-  const global = reactive<GlobalTheme>({ mode: 'dark', accent: 'purple', customHex: null })
+  const global = reactive<GlobalTheme>({
+    mode: 'dark',
+    accent: 'purple',
+    customHex: null,
+    palette: 'default',
+    customDark: '#15121d',
+    customLight: '#f6f5fb'
+  })
   const domains = reactive<Record<DomainKey, DomainTheme>>({
     diary: emptyDomain(),
     document: emptyDomain(),
@@ -79,6 +92,21 @@ export const useThemeStore = defineStore('theme', () => {
     const { mode, accent, customHex } = resolve(scope)
     const root = document.documentElement
     root.dataset.mode = mode
+
+    // Surfaces are computed and written as inline variables, overriding the
+    // stylesheet's mode defaults. Deriving them here rather than shipping a
+    // CSS block per palette is what lets a custom colour work identically to a
+    // preset.
+    const surfaces = deriveSurfaces(
+      baseFor(global.palette, mode, global.customDark, global.customLight),
+      mode
+    )
+    root.style.setProperty('--color-bg', surfaces.bg)
+    root.style.setProperty('--color-surface', surfaces.surface)
+    root.style.setProperty('--color-surface-2', surfaces.surface2)
+    root.style.setProperty('--color-border', surfaces.border)
+    root.style.setProperty('--color-ink', surfaces.ink)
+    root.style.setProperty('--color-ink-dim', surfaces.inkDim)
     if (accent === 'custom' && customHex) {
       const d = deriveAccent(customHex)
       root.dataset.accent = 'custom'
@@ -147,6 +175,17 @@ export const useThemeStore = defineStore('theme', () => {
       domains[scope].accent = accent
     }
   }
+  function setPalette(name: PaletteName): void {
+    global.palette = name
+  }
+
+  /** Sets the base colour for the current mode when using a custom palette. */
+  function setCustomSurface(mode: Mode, hex: string): void {
+    global.palette = 'custom'
+    if (mode === 'dark') global.customDark = hex
+    else global.customLight = hex
+  }
+
   function setCustom(scope: Scope, hex: string): void {
     if (scope === 'global') {
       global.accent = 'custom'
@@ -193,6 +232,8 @@ export const useThemeStore = defineStore('theme', () => {
     setMode,
     setAccent,
     setCustom,
+    setPalette,
+    setCustomSurface,
     currentScope,
     effectiveMode,
     toggleMode
