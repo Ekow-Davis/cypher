@@ -28,6 +28,17 @@ import {
   resetDonePage
 } from './accountPage.js'
 import { sendWelcome, sendPasswordReset } from './email.js'
+import {
+  initBookSchema,
+  canAccess,
+  isOwner,
+  pushChanges,
+  pullChanges,
+  createOnlineBook,
+  listBooksFor,
+  deleteOnlineBook,
+  type PushPayload
+} from './books.js'
 
 const PUBLISH_KEY = process.env.PUBLISH_KEY ?? ''
 const PORT = Number(process.env.PORT ?? 8080)
@@ -91,6 +102,7 @@ function authorised(header: string | undefined): boolean {
 
 await initSchema()
 await initAuthSchema()
+await initBookSchema()
 
 app.get('/health', async () => ({ ok: true }))
 
@@ -285,6 +297,79 @@ app.get('/api/auth/me', async (request, reply) => {
     displayName: user.display_name,
     joinCode: user.join_code
   }
+})
+
+/* ---------------- book sync ---------------- */
+
+/** Every sync route needs the caller's identity; this is the one place it's read. */
+async function requireUser(
+  request: { headers: Record<string, unknown> },
+  reply: { code: (n: number) => { send: (b: unknown) => unknown } }
+): Promise<{ id: string } | null> {
+  const header = request.headers.authorization
+  const token = typeof header === 'string' ? header.replace(/^Bearer\s+/i, '') : undefined
+  const user = await userForToken(token)
+  if (!user) {
+    reply.code(401).send({ error: 'Not signed in.' })
+    return null
+  }
+  return user
+}
+
+/** Books this writer can open, for reconnecting on another machine. */
+app.get('/api/books', async (request, reply) => {
+  const user = await requireUser(request, reply)
+  if (!user) return
+  return { books: await listBooksFor(user.id) }
+})
+
+/** Puts a local book online for the first time. */
+app.post<{ Body: { id?: string; book?: Record<string, unknown> } }>(
+  '/api/books',
+  async (request, reply) => {
+    const user = await requireUser(request, reply)
+    if (!user) return
+    const id = request.body?.id
+    if (!id) return reply.code(400).send({ error: 'A book id is required.' })
+    await createOnlineBook(id, user.id, (request.body?.book ?? {}) as never)
+    return { ok: true, id }
+  }
+)
+
+app.get<{ Params: { id: string }; Querystring: { since?: string } }>(
+  '/api/books/:id/changes',
+  async (request, reply) => {
+    const user = await requireUser(request, reply)
+    if (!user) return
+    if (!(await canAccess(request.params.id, user.id))) {
+      return reply.code(403).send({ error: 'You do not have access to that book.' })
+    }
+    const since = Number(request.query?.since ?? 0)
+    return pullChanges(request.params.id, Number.isFinite(since) ? since : 0)
+  }
+)
+
+app.post<{ Params: { id: string }; Body: PushPayload }>(
+  '/api/books/:id/changes',
+  async (request, reply) => {
+    const user = await requireUser(request, reply)
+    if (!user) return
+    if (!(await canAccess(request.params.id, user.id))) {
+      return reply.code(403).send({ error: 'You do not have access to that book.' })
+    }
+    return pushChanges(request.params.id, request.body ?? {})
+  }
+)
+
+/** Taking a book offline removes it from the server entirely. Owner only. */
+app.delete<{ Params: { id: string } }>('/api/books/:id', async (request, reply) => {
+  const user = await requireUser(request, reply)
+  if (!user) return
+  if (!(await isOwner(request.params.id, user.id))) {
+    return reply.code(403).send({ error: 'Only the book owner can do that.' })
+  }
+  await deleteOnlineBook(request.params.id)
+  return { ok: true }
 })
 
 /** Looks up a collaborator by ID + join code, for the invite flow. */

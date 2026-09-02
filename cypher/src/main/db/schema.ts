@@ -397,3 +397,44 @@ export function migration018(db: Database): void {
     ALTER TABLE volumes ADD COLUMN unnumbered_label TEXT NOT NULL DEFAULT '';
   `)
 }
+
+/**
+ * Migration 019 — online books.
+ *
+ * `remote_id` is a UUID that identifies a row across machines: the integer
+ * primary keys are per-database, so two writers would otherwise both call their
+ * first chapter "1". `dirty` marks rows edited since the last successful push,
+ * which is what lets the app work offline and catch up later; deletions can't
+ * carry a flag, so they go in their own queue.
+ */
+export function migration019(db: Database): void {
+  db.exec(`
+    ALTER TABLE books ADD COLUMN remote_id TEXT;
+    ALTER TABLE books ADD COLUMN online INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE books ADD COLUMN owner_id TEXT;
+    ALTER TABLE books ADD COLUMN owner_name TEXT;
+    ALTER TABLE books ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE books ADD COLUMN last_synced_at TEXT;
+    ALTER TABLE books ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0;
+
+    ALTER TABLE chapters ADD COLUMN remote_id TEXT;
+    ALTER TABLE chapters ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0;
+
+    ALTER TABLE volumes ADD COLUMN remote_id TEXT;
+    ALTER TABLE volumes ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_books_remote ON books(remote_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_chapters_remote ON chapters(remote_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_volumes_remote ON volumes(remote_id);
+
+    -- A deleted row leaves nothing behind to mark, so the intent is recorded
+    -- separately and drained on the next successful sync.
+    CREATE TABLE IF NOT EXISTS sync_deletions (
+      id        INTEGER PRIMARY KEY,
+      book_id   INTEGER NOT NULL,
+      kind      TEXT    NOT NULL,
+      remote_id TEXT    NOT NULL,
+      queued_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+}

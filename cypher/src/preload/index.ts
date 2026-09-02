@@ -345,6 +345,25 @@ const cypher = {
       ipcRenderer.invoke('diary:monthGroups', diaryId)
   },
 
+  onlineBooks: {
+    makeOnline: (bookId: number): Promise<{ ok: boolean; reason?: string }> =>
+      ipcRenderer.invoke('books:makeOnline', bookId),
+    takeOffline: (bookId: number): Promise<{ ok: boolean; reason?: string }> =>
+      ipcRenderer.invoke('books:takeOffline', bookId),
+    info: (
+      bookId: number
+    ): Promise<{ online: boolean; ownerName: string | null; isOwner: boolean; lastSyncedAt: string | null }> =>
+      ipcRenderer.invoke('books:onlineInfo', bookId),
+    syncNow: (bookId: number): Promise<unknown> => ipcRenderer.invoke('books:syncNow', bookId),
+    status: (bookId: number): Promise<unknown> => ipcRenderer.invoke('books:syncStatus', bookId),
+    onStatus: (cb: (payload: { bookId: number; status: unknown }) => void): (() => void) => {
+      const listener = (_e: unknown, payload: { bookId: number; status: unknown }): void =>
+        cb(payload)
+      ipcRenderer.on('sync:status', listener)
+      return () => ipcRenderer.removeListener('sync:status', listener)
+    }
+  },
+
   account: {
     onlineEnabled: (): Promise<boolean> => ipcRenderer.invoke('account:onlineEnabled'),
     setOnlineEnabled: (enabled: boolean): Promise<void> =>

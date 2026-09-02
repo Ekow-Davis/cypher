@@ -11,6 +11,7 @@ import {
   AlertTriangle
 } from 'lucide-vue-next'
 import { useChaptersStore } from '@/stores/chapters'
+import OnlineBookPanel from './OnlineBookPanel.vue'
 import type { NumberingStyle } from '@shared/numbering'
 import { useBooksStore } from '@/stores/books'
 import { assetUrl } from '@/lib/assets'
@@ -314,6 +315,7 @@ async function archiveBook(): Promise<void> {
       </div>
 
       <!-- DANGER ZONE -->
+      <OnlineBookPanel v-show="pane === 'danger'" :book-id="id" class="mb-6" />
       <div v-show="pane === 'danger'" class="rounded-2xl border border-border bg-surface p-6">
         <h2 class="mb-1 text-lg font-semibold">Danger zone</h2>
         <p class="mb-5 text-sm text-ink-dim">

@@ -1,3 +1,4 @@
+import { markDirty } from '../../sync'
 import { getDb } from '../index'
 import type { Book, CreateBookInput, UpdateBookInput } from '@shared/types'
 
@@ -49,6 +50,7 @@ export function updateBook(id: number, patch: UpdateBookInput): Book | null {
   getDb()
     .prepare(`UPDATE books SET ${sets} WHERE id = @id`)
     .run(params)
+  markDirty('book', id)
   return getBook(id)
 }
 

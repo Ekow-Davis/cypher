@@ -8,6 +8,7 @@ import { purgeExpiredTrash } from './db/repositories/trash'
 import { registerAssetSchemePrivileged, registerAssetProtocol } from './assets'
 import { createWindow } from './windows'
 import { redirectPortableStorage } from './portable'
+import { startSyncScheduler, stopSyncScheduler } from './sync'
 
 // Must run before anything else touches app.getPath('userData') — including
 // the scheme registration below, which is why it comes first in the file.
@@ -23,6 +24,7 @@ app.whenReady().then(() => {
   initSpellcheck()
   initUpdater()
   startBackupScheduler()
+  startSyncScheduler()
   try {
     const purged = purgeExpiredTrash()
     if (purged > 0) console.log(`[trash] purged ${purged} expired item(s)`)
@@ -43,5 +45,6 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   stopBackupScheduler()
+  stopSyncScheduler()
   closeDatabase()
 })

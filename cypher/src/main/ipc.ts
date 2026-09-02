@@ -54,6 +54,8 @@ import {
   isSpellcheckEnabled
 } from './contextMenu'
 import { lookupWord, thesaurusEnabled } from './thesaurus'
+import { makeBookOnline, takeBookOffline, onlineInfo } from './onlineBooks'
+import { syncBook, syncStatus } from './sync'
 import {
   onlineEnabled,
   setOnlineEnabled,
@@ -614,6 +616,13 @@ export function registerIpcHandlers(): void {
   )
   handle('diary:deleteEntry', (_e, id: number) => deleteEntry(id))
   handle('diary:monthGroups', (_e, diaryId: number | null) => listMonthGroups(diaryId))
+
+  // Online books
+  handle('books:makeOnline', (_e, bookId: number) => makeBookOnline(bookId))
+  handle('books:takeOffline', (_e, bookId: number) => takeBookOffline(bookId))
+  handle('books:onlineInfo', (_e, bookId: number) => onlineInfo(bookId))
+  handle('books:syncNow', (_e, bookId: number) => syncBook(bookId))
+  handle('books:syncStatus', (_e, bookId: number) => syncStatus(bookId))
 
   // Account — online features are opt-in, so every call here is inert until
   // the user turns them on.

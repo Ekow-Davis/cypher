@@ -1,3 +1,4 @@
+import { markDirty, queueDeletion } from '../../sync'
 import { getDb } from '../index'
 import type {
   Chapter,
@@ -50,15 +51,18 @@ export function ensureFirstChapter(bookId: number): Chapter[] {
 
 export function renameChapter(id: number, title: string): Chapter | null {
   getDb().prepare('UPDATE chapters SET title = ? WHERE id = ?').run(title.trim() || 'Untitled', id)
+  markDirty('chapter', id)
   return getChapter(id)
 }
 
+/** Every write marks the row so the sync engine knows to push it. */
 export function saveChapterContent(id: number, content: string, wordCount: number): Chapter | null {
   getDb()
     .prepare(
       "UPDATE chapters SET content = ?, word_count = ?, updated_at = datetime('now') WHERE id = ?"
     )
     .run(content, wordCount, id)
+  markDirty('chapter', id)
   return getChapter(id)
 }
 
@@ -75,6 +79,7 @@ export function updateChapterMeta(id: number, patch: UpdateChapterMetaInput): Ch
   getDb()
     .prepare(`UPDATE chapters SET ${sets} WHERE id = ?`)
     .run(...values, id)
+  markDirty('chapter', id)
   return getChapter(id)
 }
 
@@ -83,12 +88,16 @@ export function applyChapterOrder(items: ChapterPlacement[]): void {
   const db = getDb()
   const stmt = db.prepare('UPDATE chapters SET volume_id = ?, sort_order = ? WHERE id = ?')
   const tx = db.transaction((list: ChapterPlacement[]) => {
-    for (const it of list) stmt.run(it.volumeId, it.sortOrder, it.id)
+    // Reordering changes what a reader sees, so moved chapters push too.
+    const dirty = db.prepare('UPDATE chapters SET dirty = 1 WHERE id = ?')
+    for (const it of list) {
+      stmt.run(it.volumeId, it.sortOrder, it.id)
+      dirty.run(it.id)
+    }
   })
   tx(items)
 }
 
-/** Soft delete — the chapter moves to the trash and can be restored. */
 /**
  * Splits a chapter in two, placing the new one immediately after the original.
  *
@@ -174,5 +183,11 @@ export function importChapters(
 }
 
 export function deleteChapter(id: number): void {
+  // The remote id is read before the row is hidden — once it's in the trash the
+  // sync engine has no way to tell the server which chapter went.
+  const row = getDb()
+    .prepare('SELECT book_id, remote_id FROM chapters WHERE id = ?')
+    .get(id) as { book_id: number; remote_id: string | null } | undefined
   getDb().prepare("UPDATE chapters SET deleted_at = datetime('now') WHERE id = ?").run(id)
+  if (row?.remote_id) queueDeletion('chapter', row.book_id, row.remote_id)
 }

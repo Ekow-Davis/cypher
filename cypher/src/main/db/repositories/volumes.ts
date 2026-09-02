@@ -1,3 +1,4 @@
+import { markDirty, queueDeletion } from '../../sync'
 import { getDb } from '../index'
 import type { Volume } from '@shared/types'
 
@@ -43,10 +44,12 @@ export function setVolumeNumbering(
   getDb()
     .prepare('UPDATE volumes SET numbered = ?, unnumbered_label = ? WHERE id = ?')
     .run(numbered ? 1 : 0, unnumberedLabel.trim(), id)
+  markDirty('volume', id)
 }
 
 export function renameVolume(id: number, title: string): Volume | null {
   getDb().prepare('UPDATE volumes SET title = ? WHERE id = ?').run(title.trim() || 'Untitled', id)
+  markDirty('volume', id)
   return getVolume(id)
 }
 
@@ -54,6 +57,17 @@ export function renameVolume(id: number, title: string): Volume | null {
 // ON DELETE SET NULL. If deleteChapters is true, they are removed too.
 export function deleteVolume(id: number, deleteChapters = false): void {
   const db = getDb()
+  // Captured before the row goes: afterwards there is nothing left to tell the
+  // server which volume was removed.
+  const row = db
+    .prepare('SELECT book_id, remote_id FROM volumes WHERE id = ?')
+    .get(id) as { book_id: number; remote_id: string | null } | undefined
+  const doomedChapters = deleteChapters
+    ? (db
+        .prepare('SELECT id, remote_id FROM chapters WHERE volume_id = ?')
+        .all(id) as { id: number; remote_id: string | null }[])
+    : []
+
   if (deleteChapters) {
     const tx = db.transaction(() => {
       db.prepare("UPDATE chapters SET deleted_at = datetime('now') WHERE volume_id = ?").run(id)
@@ -62,6 +76,11 @@ export function deleteVolume(id: number, deleteChapters = false): void {
     tx()
   } else {
     db.prepare('DELETE FROM volumes WHERE id = ?').run(id)
+  }
+
+  if (row?.remote_id) queueDeletion('volume', row.book_id, row.remote_id)
+  for (const chapter of doomedChapters) {
+    if (chapter.remote_id && row) queueDeletion('chapter', row.book_id, chapter.remote_id)
   }
 }
 
