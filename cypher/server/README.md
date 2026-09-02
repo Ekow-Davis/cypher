@@ -9,6 +9,9 @@ Serves shared book links. Deployed to Railway.
 | `DATABASE_URL` | Postgres connection string — Railway sets this when you add a Postgres service |
 | `PUBLISH_KEY` | Secret the desktop app sends to publish. Generate with `openssl rand -base64 32` |
 | `PORT` | Set by Railway automatically |
+| `RESEND_API_KEY` | Resend key for transactional email. Without it, accounts still work — emails are skipped and logged |
+| `EMAIL_FROM` | Sender, e.g. `Cypher <no-reply@forgottenguardian.com>`. The domain must be verified in Resend |
+| `PUBLIC_URL` | Your site's address, used for links inside emails. Falls back to the request host |
 
 ## Deploying
 

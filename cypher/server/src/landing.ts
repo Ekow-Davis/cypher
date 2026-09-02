@@ -97,7 +97,8 @@ header { padding:1.2rem 0; border-bottom:1px solid var(--line); }
 .btn.primary:hover { opacity:.9; }
 .fineprint { color:var(--dim); font-size:.82rem; margin:.9rem 0 0; }
 .downloads { display:flex; gap:.6rem; justify-content:center; flex-wrap:wrap; }
-.btn.ghost { background:transparent; }
+.btn.ghost { background:transparent; border-color:var(--accent); color:var(--accent); }
+.btn.ghost:hover { background:rgb(167 139 250 / 12%); }
 .which { margin:1.1rem auto 0; max-width:30rem; text-align:left; }
 .which summary { cursor:pointer; color:var(--accent); font-size:.85rem; text-align:center; }
 .which-body { margin-top:.7rem; padding:1rem; background:var(--panel); border:1px solid var(--line);
@@ -126,7 +127,7 @@ footer { border-top:1px solid var(--line); padding:2rem 0 3rem; color:var(--dim)
 <header>
   <div class="wrap brand">
     ${brandSvg(40)} <span style="flex:1">Cypher</span>
-    <a href="/account" style="font-size:.85rem;font-weight:500;color:var(--dim);text-decoration:none">Account</a>
+    <a href="/account" class="btn ghost" style="padding:.45rem 1rem;font-size:.85rem">Account</a>
   </div>
 </header>
 

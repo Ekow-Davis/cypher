@@ -9,7 +9,9 @@ import {
   AlertCircle,
   Loader2,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Eye,
+  EyeOff
 } from 'lucide-vue-next'
 
 interface Profile {
@@ -26,6 +28,7 @@ const password = ref('')
 const busy = ref(false)
 const error = ref<string | null>(null)
 const copied = ref<string | null>(null)
+const reveal = ref(false)
 const serverUrl = ref('')
 
 async function load(): Promise<void> {
@@ -194,12 +197,21 @@ onMounted(load)
           <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-dim">
             Password
           </label>
-          <input
-            v-model="password"
-            type="password"
-            class="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent-line"
-            @keydown.enter="signIn"
-          />
+          <div class="relative">
+            <input
+              v-model="password"
+              :type="reveal ? 'text' : 'password'"
+              class="w-full rounded-xl border border-border bg-surface-2 px-3 py-2 pr-10 text-sm outline-none focus:border-accent-line"
+              @keydown.enter="signIn"
+            />
+            <button
+              class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-dim hover:text-ink"
+              :title="reveal ? 'Hide password' : 'Show password'"
+              @click="reveal = !reveal"
+            >
+              <component :is="reveal ? EyeOff : Eye" :size="15" />
+            </button>
+          </div>
         </div>
 
         <div class="flex flex-wrap gap-2">
@@ -222,6 +234,15 @@ onMounted(load)
             <ExternalLink :size="15" /> Create an account
           </a>
         </div>
+        <a
+          v-if="serverUrl"
+          :href="`${serverUrl.replace(/\/+$/, '')}/account/forgot`"
+          target="_blank"
+          rel="noopener"
+          class="block text-xs text-ink-dim underline-offset-2 hover:text-ink hover:underline"
+        >
+          Forgotten your password?
+        </a>
       </div>
 
       <p

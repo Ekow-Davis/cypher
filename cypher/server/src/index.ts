@@ -14,12 +14,25 @@ import {
   rotateJoinCode,
   setDisplayName,
   changePassword,
-  verifyJoinCredentials
+  verifyJoinCredentials,
+  createPasswordReset,
+  resetTokenValid,
+  completePasswordReset
 } from './auth.js'
-import { signUpPage, logInPage, accountPage } from './accountPage.js'
+import {
+  signUpPage,
+  logInPage,
+  accountPage,
+  forgotPage,
+  resetPage,
+  resetDonePage
+} from './accountPage.js'
+import { sendWelcome, sendPasswordReset } from './email.js'
 
 const PUBLISH_KEY = process.env.PUBLISH_KEY ?? ''
 const PORT = Number(process.env.PORT ?? 8080)
+/** Used for links in emails; falls back to the request host when unset. */
+const PUBLIC_URL = (process.env.PUBLIC_URL ?? '').trim().replace(/\/+$/, '')
 
 /**
  * Fail loudly and specifically on a misconfigured deploy.
@@ -127,6 +140,16 @@ app.post<{ Body: { email?: string; password?: string; displayName?: string } }>(
       return reply.type('text/html').send(signUpPage(result.reason, email))
     }
     setSessionCookie(reply, result.token)
+    // Sent after the account exists: a failed email must not fail the signup.
+    if (result.user) {
+      void sendWelcome(
+        result.user.email,
+        result.user.display_name,
+        result.user.id,
+        result.user.join_code,
+        PUBLIC_URL || `https://${request.headers.host}`
+      )
+    }
     return reply.redirect('/account')
   }
 )
@@ -182,6 +205,51 @@ app.post<{ Body: { currentPassword?: string; newPassword?: string } }>(
     // Every session was dropped, so a successful change lands on the login page.
     if (result.ok) return reply.type('text/html').send(logInPage('Password changed — sign in again.'))
     return reply.type('text/html').send(accountPage(user, result.reason))
+  }
+)
+
+app.get('/account/forgot', async (_request, reply) => reply.type('text/html').send(forgotPage()))
+
+app.post<{ Body: { email?: string } }>('/account/forgot', async (request, reply) => {
+  const reset = await createPasswordReset(request.body?.email ?? '')
+  if (reset) {
+    const base = PUBLIC_URL || `https://${request.headers.host}`
+    void sendPasswordReset(
+      reset.email,
+      `${base}/account/reset?token=${encodeURIComponent(reset.token)}`,
+      reset.minutes
+    )
+  }
+  // Identical response whether or not the address exists, so this page can't
+  // be used to find out who has an account.
+  return reply
+    .type('text/html')
+    .send(
+      forgotPage('If that address has an account, a reset link is on its way. Check your inbox.')
+    )
+})
+
+app.get<{ Querystring: { token?: string } }>('/account/reset', async (request, reply) => {
+  const token = request.query?.token ?? ''
+  if (!token || !(await resetTokenValid(token))) {
+    return reply
+      .type('text/html')
+      .send(forgotPage(undefined, 'That link has expired or was already used. Request a new one.'))
+  }
+  return reply.type('text/html').send(resetPage(token))
+})
+
+app.post<{ Body: { token?: string; newPassword?: string } }>(
+  '/account/reset',
+  async (request, reply) => {
+    const token = request.body?.token ?? ''
+    const result = await completePasswordReset(token, request.body?.newPassword ?? '')
+    if (!result.ok) {
+      return (await resetTokenValid(token))
+        ? reply.type('text/html').send(resetPage(token, result.reason))
+        : reply.type('text/html').send(forgotPage(undefined, result.reason))
+    }
+    return reply.type('text/html').send(resetDonePage())
   }
 )
 

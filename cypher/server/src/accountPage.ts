@@ -66,6 +66,36 @@ ${body}
 </html>`
 }
 
+/**
+ * Password input with a reveal toggle.
+ *
+ * Typing a password blind is the usual cause of a failed sign-in, so every
+ * password field in the app gets an eye — including this one on the website.
+ */
+function passwordField(id: string, name: string, label: string, extra = ''): string {
+  return `<label for="${id}">${label}</label>
+  <div style="position:relative">
+    <input id="${id}" name="${name}" type="password" required ${extra}
+           style="padding-right:3.2rem"/>
+    <button type="button" onclick="peek('${id}', this)" aria-label="Show password"
+      style="position:absolute;right:.6rem;top:.65rem;width:auto;padding:.2rem .5rem;
+             background:transparent;border:none;color:var(--dim);cursor:pointer;font-size:.78rem">
+      Show
+    </button>
+  </div>`
+}
+
+/** Shared by every page carrying a password field. */
+const PEEK_SCRIPT = `<script>
+  function peek(id, button) {
+    var field = document.getElementById(id);
+    var hidden = field.type === 'password';
+    field.type = hidden ? 'text' : 'password';
+    button.textContent = hidden ? 'Hide' : 'Show';
+    button.setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');
+  }
+</script>`
+
 function escapeHtml(s: string): string {
   return s.replace(
     /[&<>"']/g,
@@ -86,13 +116,12 @@ export function signUpPage(error?: string, email = ''): string {
         <input id="name" name="displayName" placeholder="What your co-writer will see"/>
         <label for="email">Email</label>
         <input id="email" name="email" type="email" required value="${escapeHtml(email)}"/>
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" required minlength="8"
-               placeholder="At least 8 characters"/>
+        ${passwordField('password', 'password', 'Password', 'minlength="8" placeholder="At least 8 characters"')}
         <button type="submit">Create account</button>
       </form>
       <p class="alt">Already have one? <a href="/account/login">Sign in</a></p>
-    </main>`
+    </main>
+    ${PEEK_SCRIPT}`
   )
 }
 
@@ -106,12 +135,13 @@ export function logInPage(error?: string, email = ''): string {
       <form method="post" action="/account/login">
         <label for="email">Email</label>
         <input id="email" name="email" type="email" required value="${escapeHtml(email)}"/>
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" required/>
+        ${passwordField('password', 'password', 'Password')}
         <button type="submit">Sign in</button>
       </form>
+      <p class="alt"><a href="/account/forgot">Forgotten your password?</a></p>
       <p class="alt">No account yet? <a href="/account/signup">Create one</a></p>
-    </main>`
+    </main>
+    ${PEEK_SCRIPT}`
   )
 }
 
@@ -159,10 +189,8 @@ export function accountPage(user: User, notice?: string): string {
         <h2>Change password</h2>
         <p>You'll be signed out everywhere else.</p>
         <form method="post" action="/account/password">
-          <label for="current">Current password</label>
-          <input id="current" name="currentPassword" type="password" required/>
-          <label for="next">New password</label>
-          <input id="next" name="newPassword" type="password" required minlength="8"/>
+          ${passwordField('current', 'currentPassword', 'Current password')}
+          ${passwordField('next', 'newPassword', 'New password', 'minlength="8"')}
           <button type="submit">Change password</button>
         </form>
       </div>
@@ -179,5 +207,52 @@ export function accountPage(user: User, notice?: string): string {
         setTimeout(function () { button.textContent = original; }, 1500);
       }
     </script>`
+  )
+}
+
+
+export function forgotPage(notice?: string, error?: string): string {
+  return shell(
+    'Reset your password',
+    `<main>
+      <h1>Reset your password</h1>
+      <p class="sub">We'll email you a link to choose a new one.</p>
+      ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ''}
+      ${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}
+      <form method="post" action="/account/forgot">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required/>
+        <button type="submit">Send the link</button>
+      </form>
+      <p class="alt"><a href="/account/login">Back to sign in</a></p>
+    </main>`
+  )
+}
+
+export function resetPage(token: string, error?: string): string {
+  return shell(
+    'Choose a new password',
+    `<main>
+      <h1>Choose a new password</h1>
+      <p class="sub">You'll be signed out everywhere once it changes.</p>
+      ${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}
+      <form method="post" action="/account/reset">
+        <input type="hidden" name="token" value="${escapeHtml(token)}"/>
+        ${passwordField('next', 'newPassword', 'New password', 'minlength="8"')}
+        <button type="submit">Save new password</button>
+      </form>
+    </main>
+    ${PEEK_SCRIPT}`
+  )
+}
+
+export function resetDonePage(): string {
+  return shell(
+    'Password changed',
+    `<main>
+      <h1>Password changed</h1>
+      <p class="sub">You can sign in with your new password now.</p>
+      <p class="alt"><a href="/account/login">Go to sign in</a></p>
+    </main>`
   )
 }

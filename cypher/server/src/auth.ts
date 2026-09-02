@@ -53,6 +53,13 @@ export async function initAuthSchema(): Promise<void> {
       expires_at  TIMESTAMPTZ NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+    CREATE TABLE IF NOT EXISTS password_resets (
+      token_hash TEXT PRIMARY KEY,
+      user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at    TIMESTAMPTZ
+    );
   `)
 }
 
@@ -226,4 +233,70 @@ export async function verifyJoinCredentials(
   const supplied = Buffer.from(joinCode.trim().toUpperCase())
   if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return null
   return rows[0] as User
+}
+
+
+const RESET_MINUTES = 45
+
+/**
+ * Starts a password reset.
+ *
+ * Always resolves the same way whether or not the address exists — the caller
+ * shows one message either way, so this can't be used to discover which emails
+ * have accounts.
+ */
+export async function createPasswordReset(
+  email: string
+): Promise<{ token: string; email: string; minutes: number } | null> {
+  const address = normaliseEmail(email)
+  const { rows } = await pool.query('SELECT id FROM users WHERE email = $1', [address])
+  if (!rows.length) return null
+
+  // Any earlier request becomes void, so a forwarded old email can't be used.
+  await pool.query('DELETE FROM password_resets WHERE user_id = $1', [rows[0].id])
+
+  const token = randomBytes(32).toString('base64url')
+  const expires = new Date(Date.now() + RESET_MINUTES * 60 * 1000)
+  await pool.query(
+    'INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES ($1, $2, $3)',
+    [hashToken(token), rows[0].id, expires]
+  )
+  return { token, email: address, minutes: RESET_MINUTES }
+}
+
+export async function resetTokenValid(token: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    'SELECT 1 FROM password_resets WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()',
+    [hashToken(token)]
+  )
+  return rows.length > 0
+}
+
+export async function completePasswordReset(
+  token: string,
+  newPassword: string
+): Promise<{ ok: boolean; reason?: string }> {
+  if (newPassword.length < 8) {
+    return { ok: false, reason: 'Use at least 8 characters for your password.' }
+  }
+  const { rows } = await pool.query(
+    'SELECT user_id FROM password_resets WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()',
+    [hashToken(token)]
+  )
+  if (!rows.length) {
+    return { ok: false, reason: 'That link has expired or was already used. Request a new one.' }
+  }
+
+  const userId = rows[0].user_id
+  await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
+    await hashPassword(newPassword),
+    userId
+  ])
+  // Single use, and every existing session dies: a reset usually means the
+  // account was already at risk.
+  await pool.query('UPDATE password_resets SET used_at = now() WHERE token_hash = $1', [
+    hashToken(token)
+  ])
+  await pool.query('DELETE FROM sessions WHERE user_id = $1', [userId])
+  return { ok: true }
 }
