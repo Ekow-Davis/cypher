@@ -54,6 +54,15 @@ import {
   isSpellcheckEnabled
 } from './contextMenu'
 import { lookupWord, thesaurusEnabled } from './thesaurus'
+import {
+  onlineEnabled,
+  setOnlineEnabled,
+  signIn,
+  signOut,
+  storedProfile,
+  refreshProfile,
+  verifyWriter
+} from './account'
 import { importManuscript } from './import/importManuscript'
 import { exportCharacterTemplate } from './characters/template'
 import { importCharacterSheets } from './characters/import'
@@ -605,6 +614,18 @@ export function registerIpcHandlers(): void {
   )
   handle('diary:deleteEntry', (_e, id: number) => deleteEntry(id))
   handle('diary:monthGroups', (_e, diaryId: number | null) => listMonthGroups(diaryId))
+
+  // Account — online features are opt-in, so every call here is inert until
+  // the user turns them on.
+  handle('account:onlineEnabled', () => onlineEnabled())
+  handle('account:setOnlineEnabled', (_e, enabled: boolean) => setOnlineEnabled(enabled))
+  handle('account:signIn', (_e, email: string, password: string) => signIn(email, password))
+  handle('account:signOut', () => signOut())
+  handle('account:profile', () => storedProfile())
+  handle('account:refresh', () => refreshProfile())
+  handle('account:verifyWriter', (_e, userId: string, joinCode: string) =>
+    verifyWriter(userId, joinCode)
+  )
 
   // Spelling — Chromium's dictionaries, shared by every editor in the app
   handle('spell:enabled', () => isSpellcheckEnabled())

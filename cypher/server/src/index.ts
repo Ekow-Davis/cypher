@@ -5,6 +5,18 @@ import { renderReaderHtml } from './shared/readerHtml.js'
 import type { ShareSnapshot } from './shared/types.js'
 import { renderLandingPage } from './landing.js'
 import { BRAND_SVG } from './shared/brandMark.js'
+import {
+  initAuthSchema,
+  signUp,
+  logIn,
+  logOut,
+  userForToken,
+  rotateJoinCode,
+  setDisplayName,
+  changePassword,
+  verifyJoinCredentials
+} from './auth.js'
+import { signUpPage, logInPage, accountPage } from './accountPage.js'
 
 const PUBLISH_KEY = process.env.PUBLISH_KEY ?? ''
 const PORT = Number(process.env.PORT ?? 8080)
@@ -37,6 +49,24 @@ const app = Fastify({ logger: true, bodyLimit: 25 * 1024 * 1024 })
 await app.register(cors, { origin: true })
 
 /**
+ * Fastify parses JSON out of the box but not form posts, so every HTML form on
+ * the account pages would be rejected with a 415 without this. Registered by
+ * hand rather than pulling in @fastify/formbody for a three-line parser.
+ */
+app.addContentTypeParser(
+  'application/x-www-form-urlencoded',
+  { parseAs: 'string' },
+  (_request, body, done) => {
+    try {
+      const params = new URLSearchParams(body as string)
+      done(null, Object.fromEntries(params.entries()))
+    } catch (error) {
+      done(error as Error, undefined)
+    }
+  }
+)
+
+/**
  * Publishing is the only write path, so it is the only thing that needs a
  * secret. Readers are anonymous by design — the token in the URL *is* the
  * capability, which is why tokens are 128 bits of randomness.
@@ -47,8 +77,168 @@ function authorised(header: string | undefined): boolean {
 }
 
 await initSchema()
+await initAuthSchema()
 
 app.get('/health', async () => ({ ok: true }))
+
+/* ---------------- accounts ---------------- */
+
+const SESSION_COOKIE = 'cypher_session'
+
+/** Reads the session cookie without pulling in a cookie plugin for one value. */
+function sessionToken(request: { headers: Record<string, unknown> }): string | undefined {
+  const raw = request.headers.cookie
+  if (typeof raw !== 'string') return undefined
+  for (const part of raw.split(';')) {
+    const [name, ...rest] = part.trim().split('=')
+    if (name === SESSION_COOKIE) return decodeURIComponent(rest.join('='))
+  }
+  return undefined
+}
+
+function setSessionCookie(reply: { header: (k: string, v: string) => void }, token: string): void {
+  // HttpOnly keeps the token away from page scripts; SameSite=Lax is enough
+  // here because every authenticated action is a same-site form post.
+  reply.header(
+    'Set-Cookie',
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
+      30 * 24 * 60 * 60
+    }${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
+  )
+}
+
+app.get('/account/signup', async (_request, reply) =>
+  reply.type('text/html').send(signUpPage())
+)
+app.get('/account/login', async (_request, reply) => reply.type('text/html').send(logInPage()))
+
+app.get('/account', async (request, reply) => {
+  const user = await userForToken(sessionToken(request))
+  if (!user) return reply.redirect('/account/login')
+  return reply.type('text/html').send(accountPage(user))
+})
+
+app.post<{ Body: { email?: string; password?: string; displayName?: string } }>(
+  '/account/signup',
+  async (request, reply) => {
+    const { email = '', password = '', displayName = '' } = request.body ?? {}
+    const result = await signUp(email, password, displayName)
+    if (!result.ok || !result.token) {
+      return reply.type('text/html').send(signUpPage(result.reason, email))
+    }
+    setSessionCookie(reply, result.token)
+    return reply.redirect('/account')
+  }
+)
+
+app.post<{ Body: { email?: string; password?: string } }>(
+  '/account/login',
+  async (request, reply) => {
+    const { email = '', password = '' } = request.body ?? {}
+    const result = await logIn(email, password)
+    if (!result.ok || !result.token) {
+      return reply.type('text/html').send(logInPage(result.reason, email))
+    }
+    setSessionCookie(reply, result.token)
+    return reply.redirect('/account')
+  }
+)
+
+app.post('/account/logout', async (request, reply) => {
+  const token = sessionToken(request)
+  if (token) await logOut(token)
+  reply.header('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; Max-Age=0`)
+  return reply.redirect('/')
+})
+
+app.post('/account/rotate', async (request, reply) => {
+  const user = await userForToken(sessionToken(request))
+  if (!user) return reply.redirect('/account/login')
+  await rotateJoinCode(user.id)
+  const updated = await userForToken(sessionToken(request))
+  return reply
+    .type('text/html')
+    .send(accountPage(updated!, 'Your join code has changed. Older invitations no longer work.'))
+})
+
+app.post<{ Body: { displayName?: string } }>('/account/name', async (request, reply) => {
+  const user = await userForToken(sessionToken(request))
+  if (!user) return reply.redirect('/account/login')
+  await setDisplayName(user.id, request.body?.displayName ?? '')
+  const updated = await userForToken(sessionToken(request))
+  return reply.type('text/html').send(accountPage(updated!, 'Name saved.'))
+})
+
+app.post<{ Body: { currentPassword?: string; newPassword?: string } }>(
+  '/account/password',
+  async (request, reply) => {
+    const user = await userForToken(sessionToken(request))
+    if (!user) return reply.redirect('/account/login')
+    const result = await changePassword(
+      user.id,
+      request.body?.currentPassword ?? '',
+      request.body?.newPassword ?? ''
+    )
+    // Every session was dropped, so a successful change lands on the login page.
+    if (result.ok) return reply.type('text/html').send(logInPage('Password changed — sign in again.'))
+    return reply.type('text/html').send(accountPage(user, result.reason))
+  }
+)
+
+/* ------------- API used by the desktop app ------------- */
+
+/** Exchanges email and password for a token the app stores. */
+app.post<{ Body: { email?: string; password?: string } }>(
+  '/api/auth/login',
+  async (request, reply) => {
+    const result = await logIn(request.body?.email ?? '', request.body?.password ?? '')
+    if (!result.ok) return reply.code(401).send({ error: result.reason })
+    return {
+      token: result.token,
+      user: {
+        id: result.user!.id,
+        email: result.user!.email,
+        displayName: result.user!.display_name,
+        joinCode: result.user!.join_code
+      }
+    }
+  }
+)
+
+/** Confirms a stored token is still good, and returns the current profile. */
+app.get('/api/auth/me', async (request, reply) => {
+  const header = request.headers.authorization
+  const token = typeof header === 'string' ? header.replace(/^Bearer\s+/i, '') : undefined
+  const user = await userForToken(token)
+  if (!user) return reply.code(401).send({ error: 'Not signed in.' })
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.display_name,
+    joinCode: user.join_code
+  }
+})
+
+/** Looks up a collaborator by ID + join code, for the invite flow. */
+app.post<{ Body: { userId?: string; joinCode?: string } }>(
+  '/api/users/verify',
+  async (request, reply) => {
+    const header = request.headers.authorization
+    const token = typeof header === 'string' ? header.replace(/^Bearer\s+/i, '') : undefined
+    if (!(await userForToken(token))) return reply.code(401).send({ error: 'Not signed in.' })
+
+    const found = await verifyJoinCredentials(
+      request.body?.userId ?? '',
+      request.body?.joinCode ?? ''
+    )
+    if (!found) {
+      // One message for both failures: distinguishing them would let someone
+      // confirm a writer ID exists by trying codes against it.
+      return reply.code(404).send({ error: 'No writer found with that ID and join code.' })
+    }
+    return { id: found.id, displayName: found.display_name }
+  }
+)
 
 /**
  * Browsers request this regardless of the inline <link rel="icon">, so serving

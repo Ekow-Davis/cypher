@@ -7,6 +7,7 @@ import ScriptFontPanel from '@/components/ScriptFontPanel.vue'
 import DiarySecurityPanel from '@/components/DiarySecurityPanel.vue'
 import ShareServerPanel from '@/components/ShareServerPanel.vue'
 import UpdatePanel from '@/components/UpdatePanel.vue'
+import AccountPanel from '@/components/AccountPanel.vue'
 import WritingAidsPanel from '@/components/WritingAidsPanel.vue'
 import TrashPanel from '@/components/TrashPanel.vue'
 import { usePreferencesStore, type FocusWidth } from '@/stores/preferences'
@@ -303,6 +304,7 @@ onMounted(async () => {
       <p v-else-if="dbError" class="text-sm text-red-400">Database error: {{ dbError }}</p>
       <p v-else class="text-sm text-ink-dim">Checking…</p>
     </div>
+    <AccountPanel v-show="section === 'data'" class="mt-6" />
     <UpdatePanel v-show="section === 'data'" class="mt-6" />
     <ShareServerPanel v-show="section === 'data'" class="mt-6" />
     <DiarySecurityPanel v-show="section === 'data'" class="mt-6" />

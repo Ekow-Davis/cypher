@@ -123,7 +123,12 @@ footer { border-top:1px solid var(--line); padding:2rem 0 3rem; color:var(--dim)
 </style>
 </head>
 <body>
-<header><div class="wrap brand">${brandSvg(40)} Cypher</div></header>
+<header>
+  <div class="wrap brand">
+    ${brandSvg(40)} <span style="flex:1">Cypher</span>
+    <a href="/account" style="font-size:.85rem;font-weight:500;color:var(--dim);text-decoration:none">Account</a>
+  </div>
+</header>
 
 <div class="wrap">
   <div class="hero">

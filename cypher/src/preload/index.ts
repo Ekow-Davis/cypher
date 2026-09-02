@@ -345,6 +345,25 @@ const cypher = {
       ipcRenderer.invoke('diary:monthGroups', diaryId)
   },
 
+  account: {
+    onlineEnabled: (): Promise<boolean> => ipcRenderer.invoke('account:onlineEnabled'),
+    setOnlineEnabled: (enabled: boolean): Promise<void> =>
+      ipcRenderer.invoke('account:setOnlineEnabled', enabled),
+    signIn: (
+      email: string,
+      password: string
+    ): Promise<{ ok: boolean; reason?: string; profile?: unknown }> =>
+      ipcRenderer.invoke('account:signIn', email, password),
+    signOut: (): Promise<void> => ipcRenderer.invoke('account:signOut'),
+    profile: (): Promise<unknown> => ipcRenderer.invoke('account:profile'),
+    refresh: (): Promise<unknown> => ipcRenderer.invoke('account:refresh'),
+    verifyWriter: (
+      userId: string,
+      joinCode: string
+    ): Promise<{ ok: boolean; id?: string; displayName?: string; reason?: string }> =>
+      ipcRenderer.invoke('account:verifyWriter', userId, joinCode)
+  },
+
   spell: {
     enabled: (): Promise<boolean> => ipcRenderer.invoke('spell:enabled'),
     setEnabled: (enabled: boolean): Promise<void> =>
