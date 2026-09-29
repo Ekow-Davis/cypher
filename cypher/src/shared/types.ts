@@ -106,11 +106,24 @@ export interface LoreEntry {
   content: string // Tiptap document JSON (stringified)
   category: string
   sort_order: number
+  /** The library entry this was copied from or sent to, if any. */
+  library_id?: number | null
 }
 
 export interface CreateLoreOptions {
   title?: string
   category?: string
+}
+
+/** One file read for import into the codex, before it becomes an entry. */
+export interface LoreImportFile {
+  fileName: string
+  /** From a leading heading, else the file name. */
+  title: string
+  html: string
+  words: number
+  /** Set when the file could not be read; html is then empty. */
+  error?: string
 }
 
 export interface Character {
@@ -424,4 +437,104 @@ export interface CharacterImportResult {
   fileName: string
   characters: ImportedCharacter[]
   unknownLabels: string[]
+}
+
+// ===== Timeline =====
+
+export type TimelineKind = 'chapter' | 'lore' | 'character' | 'event'
+
+/** A dated thing on a book's in-world timeline. */
+export interface TimelineItem {
+  id: number
+  book_id: number
+  kind: TimelineKind
+  /** The chapter, lore entry or character this dates; null for events. */
+  ref_id: number | null
+  /** Events only — dated items take their name from what they point at. */
+  title: string
+  note: string
+  start_at: number
+  /** Set for spans: a lifespan, a war, a reign. */
+  end_at: number | null
+  /** How the date reads in-world, e.g. "Spring, 312 AE". */
+  label: string
+  color: string | null
+}
+
+export interface TimelineUpsert {
+  bookId: number
+  kind: TimelineKind
+  refId: number | null
+  /** Update this row; omitted to create (or match by kind + refId). */
+  id?: number
+  title?: string
+  note?: string
+  start_at: number
+  end_at?: number | null
+  label?: string
+  color?: string | null
+}
+
+// ===== Lore library =====
+
+/** A lore entry kept outside any book, for copying into many. */
+export interface LibraryLoreEntry {
+  id: number
+  title: string
+  category: string
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+// ===== Writing statistics =====
+
+export type StatsArea = 'book' | 'document' | 'diary' | 'reader' | 'other'
+
+/** One hour's counts for one area and scope. Increments, not totals, when recorded. */
+export interface StatsHourRow {
+  /** Local time, 'YYYY-MM-DD HH'. */
+  hour: string
+  area: StatsArea
+  scope_id: number
+  chars_typed: number
+  keystrokes: number
+  backspaces: number
+  words_added: number
+  words_deleted: number
+  words_pasted: number
+  active_seconds: number
+  app_seconds: number
+}
+
+export interface StatsBurst {
+  /** Local time, 'YYYY-MM-DD HH:MM:SS'. */
+  started_at: string
+  seconds: number
+  chars: number
+  area: StatsArea
+  scope_id: number
+}
+
+export interface StatsSession {
+  id: string
+  started_at: string
+  ended_at: string
+  active_seconds: number
+  words_added: number
+  words_deleted: number
+}
+
+export interface StatsBatch {
+  hours: StatsHourRow[]
+  bursts: StatsBurst[]
+  sessions: StatsSession[]
+}
+
+export interface StatsSummary {
+  hours: StatsHourRow[]
+  bursts: StatsBurst[]
+  sessions: StatsSession[]
+  books: { id: number; title: string }[]
+  documents: { id: number; title: string }[]
 }

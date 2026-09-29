@@ -56,7 +56,8 @@ html, body, #app { height: 100%; margin: 0; }
 body {
   background-color: var(--color-bg);
   color: var(--color-ink);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Settings → Appearance can swap this for any installed or library font. */
+  font-family: var(--font-ui, system-ui, -apple-system, 'Segoe UI', sans-serif);
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
@@ -75,6 +76,8 @@ body {
   color: var(--color-ink);
   /* Set once in Settings → Writing; applies to the manuscript and lore editors. */
   font-family: var(--font-editor, Georgia, 'Times New Roman', serif);
+  /* Writing size, from Settings or the size control in the editor toolbar. */
+  font-size: var(--editor-size, 16px);
 }
 .cypher-prose:focus {
   outline: none;
@@ -83,17 +86,17 @@ body {
   margin: 0.5rem 0;
 }
 .cypher-prose h1 {
-  font-size: 1.6rem;
+  font-size: 1.6em;
   font-weight: 700;
   margin: 1.1rem 0 0.5rem;
 }
 .cypher-prose h2 {
-  font-size: 1.3rem;
+  font-size: 1.3em;
   font-weight: 700;
   margin: 1rem 0 0.5rem;
 }
 .cypher-prose h3 {
-  font-size: 1.1rem;
+  font-size: 1.1em;
   font-weight: 700;
   margin: 0.85rem 0 0.4rem;
 }
@@ -133,6 +136,19 @@ body {
 .cypher-mention:hover {
   background: color-mix(in oklab, var(--color-accent) 22%, transparent);
   text-decoration: underline;
+}
+
+/* Lore references read as places and things rather than people: no fill,
+   a dotted rule underneath, so the two kinds are told apart at a glance. */
+.cypher-mention[data-kind='lore'] {
+  background: transparent;
+  border-bottom: 1px dotted color-mix(in oklab, var(--color-accent) 70%, transparent);
+  border-radius: 0;
+  padding: 0;
+}
+.cypher-mention[data-kind='lore']:hover {
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  text-decoration: none;
 }
 
 /* ---------- Search highlight ---------- */
@@ -590,4 +606,62 @@ body {
 }
 .collaboration-carets__caret:hover .collaboration-carets__label {
   opacity: 1;
+}
+
+/* ---------- Scene break ---------- */
+.cypher-prose .cypher-scene-break {
+  text-align: center;
+  letter-spacing: 0.4em;
+  color: var(--color-ink-dim);
+  margin: 1.4em 0;
+  user-select: none;
+  cursor: default;
+}
+.cypher-prose .cypher-scene-break.ProseMirror-selectednode {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+/* An unlinked reference — copied in from the library with nothing of that
+   name in this book yet. It reconnects by itself once one exists. */
+.cypher-mention[data-id='-1'] {
+  opacity: 0.55;
+  text-decoration: underline dotted;
+  cursor: help;
+}
+
+/* ---------- Charts (stats page) ----------
+   Categorical slots in a fixed, validated order (CVD-checked against both
+   the light and dark surfaces); dark mode gets its own steps of the same
+   hues rather than an automatic flip. Magnitude uses the accent, one hue. */
+.viz-root {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --viz-grid: color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+[data-mode='dark'] .viz-root {
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+}
+.viz-tip {
+  pointer-events: none;
+  position: absolute;
+  z-index: 20;
+  min-width: 8rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0.45rem 0.6rem;
+  font-size: 11px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  white-space: nowrap;
 }

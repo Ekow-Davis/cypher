@@ -75,6 +75,19 @@ export function createWindow(route = '/'): BrowserWindow | null {
 
   attachContextMenu(window)
 
+  // Ctrl + / Ctrl - / Ctrl 0 step the interface scale saved in Settings rather
+  // than Chromium's own zoom, which would drift from the saved value and reset
+  // on the next launch. Swallowing the key here also stops the hidden default
+  // menu's zoom accelerators from firing on top.
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || !(input.control || input.meta) || input.alt) return
+    const key = input.key
+    const step = key === '=' || key === '+' ? 1 : key === '-' || key === '_' ? -1 : key === '0' ? 0 : null
+    if (step === null) return
+    event.preventDefault()
+    window.webContents.send('view:zoomStep', step)
+  })
+
   window.on('ready-to-show', () => window.show())
   window.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)

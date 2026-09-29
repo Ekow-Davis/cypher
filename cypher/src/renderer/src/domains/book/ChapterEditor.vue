@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, watch, nextTick, onMounted, onBeforeUnmount, type Component } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount, type Component } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import { FindReplace, findKey, findMatches } from '@/lib/findReplace'
@@ -10,7 +10,14 @@ import CollaborationCaret from '@tiptap/extension-collaboration-caret'
 import { connectChapter, colorFor, type CollabConnection, type ConnectionState } from '@/lib/collabSocket'
 import { Awareness } from 'y-protocols/awareness'
 import { applyCase, type CaseMode } from '@/lib/textCase'
-import { createCharacterMention, mentionClickHandler } from '@/lib/characterMention'
+import {
+  createCharacterMention,
+  mentionClickHandler,
+  syncMentionLabels,
+  mentionNamesKey
+} from '@/lib/characterMention'
+import { SceneBreak } from '@/lib/sceneBreak'
+import { TextRules } from '@/lib/textRules'
 import { useBookUiStore } from '@/stores/bookUi'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useAppStore } from '@/stores/app'
@@ -27,6 +34,8 @@ import {
   List,
   ListOrdered, SplitSquareVertical, Loader2 } from 'lucide-vue-next'
 import { useChaptersStore } from '@/stores/chapters'
+import WritingTextControls from '@/components/WritingTextControls.vue'
+import WhenField from './WhenField.vue'
 import type { Chapter } from '@shared/types'
 
 const props = defineProps<{
@@ -80,14 +89,19 @@ const editor = useEditor({
         StarterKit.configure({ undoRedo: false }),
         Collaboration.configure({ document: collabDoc, field: 'body' }),
         CollaborationCaret.configure({ provider: { awareness } }),
-        createCharacterMention(),
+        createCharacterMention({ lore: true }),
+        SceneBreak,
+        TextRules,
         FindReplace
       ]
-    : [StarterKit, createCharacterMention(), FindReplace],
+    : [StarterKit, createCharacterMention({ lore: true }), SceneBreak, TextRules, FindReplace],
   content: '',
   editorProps: {
     attributes: { class: 'cypher-prose' },
-    handleClick: mentionClickHandler((id) => bookUi.openCharacter(id))
+    handleClick: mentionClickHandler(
+      (id) => bookUi.openCharacter(id),
+      (id) => bookUi.openLore(id)
+    )
   },
   onUpdate: () => {
     refreshStats()
@@ -103,6 +117,9 @@ const editor = useEditor({
     if (status.value !== 'saved') void saveNow()
   }
 })
+
+/** The chapter on screen, for template bindings (loadedId itself isn't reactive). */
+const loadedChapterId = computed(() => props.chapter?.id ?? null)
 
 const FOCUS_WIDTH: Record<string, string> = {
   narrow: 'max-w-xl',
@@ -199,6 +216,33 @@ function applySearchTarget(): void {
   const el = dom.nodeType === 1 ? dom : dom.parentElement
   el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
 }
+
+/** Scrolls to and selects the first mention a backlink pointed at. */
+function applyMentionTarget(): void {
+  const ed = editor.value
+  const target = bookUi.mentionTarget
+  if (!ed || !target || target.chapterId !== loadedId) return
+  let found: number | null = null
+  ed.state.doc.descendants((node, pos) => {
+    if (found !== null) return false
+    if (
+      node.type.name === 'mention' &&
+      Number(node.attrs.id) === target.id &&
+      (node.attrs.kind === 'lore' ? 'lore' : 'character') === target.kind
+    ) {
+      found = pos
+      return false
+    }
+    return true
+  })
+  bookUi.mentionTarget = null
+  if (found === null) return
+  const pos: number = found
+  ed.chain().focus().setNodeSelection(pos).run()
+  const dom = ed.view.nodeDOM(pos) as HTMLElement | null
+  dom?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+}
+watch(() => bookUi.mentionTarget, () => void setTimeout(applyMentionTarget, 30), { deep: true })
 
 // The chapter may still be loading when the jump is requested, so re-run once
 // content settles as well as when the target changes.
@@ -384,6 +428,8 @@ async function startCollab(): Promise<void> {
   }
 
   collabTimer = setInterval(() => void pushCollab(), 15_000)
+  // Once the shared document has arrived, correct any renamed mentions in it.
+  setTimeout(() => syncMentionLabels(editor.value), 2500)
 }
 
 /** Keeps a readable local copy; sharing itself happens over the socket. */
@@ -413,6 +459,7 @@ function loadChapter(ch: Chapter | null): void {
   // stats belong to the chapter on screen
   setTimeout(refreshStats, 0)
   setTimeout(applySearchTarget, 0)
+  setTimeout(applyMentionTarget, 30)
   const ed = editor.value
   if (!ed) return
   loadingContent = true
@@ -435,6 +482,15 @@ function loadChapter(ch: Chapter | null): void {
   if (!collabDoc) ed.commands.setContent(content as never)
   status.value = 'saved'
   loadingContent = false
+  // Renamed characters or entries: refresh the names this chapter shows.
+  // Outside the loading guard on purpose, so a corrected name gets saved.
+  if (!collabDoc) setTimeout(() => syncMentionLabels(editor.value), 0)
+}
+
+watch(mentionNamesKey, () => syncMentionLabels(editor.value))
+
+function insertSceneBreak(): void {
+  editor.value?.chain().focus().insertSceneBreak(prefs.sceneBreakGlyph).run()
 }
 
 // Load the first chapter once the editor is ready.
@@ -633,6 +689,10 @@ const tools: Tool[] = [
             <option v-for="c in characters.characters" :key="c.id" :value="c.id">{{ c.name }}</option>
           </select>
         </div>
+        <div v-if="loadedChapterId != null">
+          <div class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-dim">When</div>
+          <WhenField kind="chapter" :ref-id="loadedChapterId" />
+        </div>
       </div>
       <div>
         <div class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-dim">Synopsis</div>
@@ -678,6 +738,17 @@ const tools: Tool[] = [
       >
         {{ c.glyph }}
       </button>
+
+      <span class="mx-1 h-4 w-px shrink-0 bg-border" />
+      <button
+        class="rounded-md px-2 py-1.5 text-[11px] font-semibold tracking-widest text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+        :title="`Insert scene break (${prefs.sceneBreakGlyph})`"
+        @click="insertSceneBreak"
+      >
+        ⁂
+      </button>
+      <span class="mx-1 h-4 w-px shrink-0 bg-border" />
+      <WritingTextControls />
     </div>
 
     <!-- editor surface -->

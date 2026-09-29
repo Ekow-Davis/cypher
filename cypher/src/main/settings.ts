@@ -13,11 +13,14 @@ function settingsPath(): string {
 }
 
 let cache: Record<string, unknown> | null = null
+/** Whether settings.json was already on disk when this process first looked. */
+let existedAtLaunch: boolean | null = null
 
 function load(): Record<string, unknown> {
   if (cache) return cache
   try {
     const p = settingsPath()
+    existedAtLaunch = existsSync(p)
     cache = existsSync(p) ? (JSON.parse(readFileSync(p, 'utf8')) as Record<string, unknown>) : {}
   } catch (error) {
     console.error('[settings] read failed:', error)
@@ -48,4 +51,14 @@ export function setSetting(key: string, value: unknown): boolean {
   store[key] = value
   persist()
   return true
+}
+
+/**
+ * True on the very first launch on this machine. Decided by whether the
+ * settings file existed before anything this session wrote to it, since
+ * startup itself records a few values (spellcheck language, backup times).
+ */
+export function isFreshInstall(): boolean {
+  load()
+  return existedAtLaunch === false
 }

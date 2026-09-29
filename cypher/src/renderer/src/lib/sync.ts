@@ -8,6 +8,8 @@ import { useReaderStore } from '@/stores/reader'
 import { useDocumentsStore } from '@/stores/documents'
 import { applyScriptFont } from '@/lib/scriptFont'
 import { useFontsStore } from '@/stores/fonts'
+import { useTimelineStore } from '@/stores/timeline'
+import { useLibraryStore } from '@/stores/library'
 
 /**
  * Keeps windows in step. Main broadcasts which slice of data changed; this
@@ -43,6 +45,15 @@ export function installSync(): void {
         case 'notes':
           await notes.refresh()
           break
+        case 'timeline':
+          await useTimelineStore().refresh()
+          break
+        case 'library': {
+          const library = useLibraryStore()
+          if (library.loaded) await library.load()
+          await lore.refresh()
+          break
+        }
         case 'goals':
         case 'checkins':
           if (insights.bookId != null) await insights.loadForBook(insights.bookId)

@@ -65,6 +65,7 @@ h1.book { font-size:1.9em; text-align:center; margin:0 0 .3rem; }
 .body blockquote { border-left:3px solid var(--line); margin:1em 0; padding-left:1em; color:var(--dim); }
 .body img { max-width:100%; height:auto; }
 .body hr { border:none; border-top:1px solid var(--line); margin:2em 0; }
+.body .scene-break { text-align:center; text-indent:0; margin:2em 0; letter-spacing:.3em; color:var(--dim, inherit); }
 .body table { border-collapse:collapse; width:100%; }
 .body th,.body td { border:1px solid var(--line); padding:6px 8px; }
 .footnotes { margin-top:2.5em; padding-top:1em; border-top:1px solid var(--line); font-size:.82em; color:var(--dim); }

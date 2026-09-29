@@ -10,7 +10,8 @@ const CSS = `body{font-family:Georgia,serif;line-height:1.6;margin:1em}
 h1{font-size:1.5em;margin:0 0 1em}p{margin:0 0 .7em;text-align:justify}
 blockquote{margin:.8em 0 .8em 1.5em;font-style:italic}
 .synopsis{font-style:italic;color:#555;margin-bottom:1.2em}
-.mention{font-weight:600}`
+.mention{font-weight:600}
+.scene-break{text-align:center;text-indent:0;margin:1.2em 0;letter-spacing:.3em}`
 
 interface Item {
   id: string

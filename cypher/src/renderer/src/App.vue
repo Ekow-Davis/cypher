@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import SidebarRail from '@/components/SidebarRail.vue'
 import { ShieldAlert, X } from 'lucide-vue-next'
 import { useAppStore } from '@/stores/app'
@@ -10,8 +10,16 @@ import { installSync } from '@/lib/sync'
 import { applyScriptFont } from '@/lib/scriptFont'
 import { useFontsStore } from '@/stores/fonts'
 import ThesaurusPopup from '@/components/ThesaurusPopup.vue'
+import WhatsNewDialog from '@/components/WhatsNewDialog.vue'
+import WrapHint from '@/components/WrapHint.vue'
+import { installWrap } from '@/lib/wrapSelection'
+import { installMouseButtons } from '@/lib/mouseButtons'
+import { installStatsTracker } from '@/lib/statsTracker'
+import { installTextRulesForFields } from '@/lib/textRules'
+import CommandPalette from '@/components/CommandPalette.vue'
 
 const route = useRoute()
+const router = useRouter()
 const appStore = useAppStore()
 const theme = useThemeStore()
 const prefs = usePreferencesStore()
@@ -53,13 +61,65 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => prefs.editorFontSize,
+  (px) => document.documentElement.style.setProperty('--editor-size', `${px}px`),
+  { immediate: true }
+)
+
+watch(
+  () => prefs.uiFont,
+  (family) => {
+    if (family) document.documentElement.style.setProperty('--font-ui', family)
+    else document.documentElement.style.removeProperty('--font-ui')
+  },
+  { immediate: true }
+)
+
+// Interface scale goes through the window's zoom rather than a root font-size:
+// much of the chrome is sized in pixels, and zoom scales all of it evenly,
+// including the maths behind popups and page layout.
+watch(
+  () => prefs.uiScale,
+  (scale) => {
+    try {
+      window.cypher.view.setZoom(scale)
+    } catch {
+      /* older preload */
+    }
+  },
+  { immediate: true }
+)
+
 onMounted(async () => {
+  installWrap()
+  installMouseButtons(router)
+  installStatsTracker(router)
+  installTextRulesForFields()
+  try {
+    // Ctrl + / Ctrl - / Ctrl 0, as in a browser; caught in main so the
+    // default zoom never runs alongside.
+    window.cypher.view.onZoomStep((step) => {
+      if (step === 0) prefs.setUiScale(1)
+      else prefs.stepUiScale(step)
+    })
+  } catch {
+    /* older preload */
+  }
   installSync()
   void applyScriptFont()
   void fonts.load()
   void theme.load()
   void prefs.load()
-  void appStore.init()
+  void appStore.init().then(async () => {
+    // Once, in the main window only — a second window opening shouldn't
+    // bring the release notes back.
+    try {
+      if (!(await window.cypher.windows.isSecondary())) await appStore.checkWhatsNew()
+    } catch {
+      /* older preload */
+    }
+  })
   try {
     archiveReminder.value = await window.cypher.backup.archiveDue()
   } catch {
@@ -94,4 +154,7 @@ onMounted(async () => {
     </div>
   </div>
   <ThesaurusPopup />
+  <WhatsNewDialog />
+  <WrapHint />
+  <CommandPalette />
 </template>

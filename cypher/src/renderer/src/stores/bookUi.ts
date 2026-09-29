@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useCharactersStore } from './characters'
+import { useLoreStore } from './lore'
+import { useChaptersStore } from './chapters'
 
-export type BookTab = 'manuscript' | 'lore' | 'characters'
+export type BookTab = 'manuscript' | 'lore' | 'characters' | 'timeline'
 
 /**
  * Cross-tab UI state for the book workspace. Lives in a store (rather than
@@ -70,10 +72,38 @@ export const useBookUiStore = defineStore('bookUi', () => {
     tab.value = 'characters'
   }
 
+  /**
+   * A mention for the chapter editor to scroll to once the chapter is open —
+   * what a backlink click asks for.
+   */
+  const mentionTarget = ref<{
+    chapterId: number
+    kind: 'character' | 'lore'
+    id: number
+    nonce: number
+  } | null>(null)
+
+  function openChapterAtMention(chapterId: number, kind: 'character' | 'lore', id: number): void {
+    const chapters = useChaptersStore()
+    chapters.setActive(chapterId)
+    tab.value = 'manuscript'
+    mentionTarget.value = { chapterId, kind, id, nonce: Date.now() }
+  }
+
+  function openLore(id: number): void {
+    const lore = useLoreStore()
+    if (!lore.entries.some((e) => e.id === id)) return
+    lore.setActive(id)
+    tab.value = 'lore'
+  }
+
   return {
     tab,
     setTab,
     openCharacter,
+    openLore,
+    mentionTarget,
+    openChapterAtMention,
     searchTarget,
     jumpToHit,
     clearSearchTarget,

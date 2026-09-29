@@ -2,7 +2,12 @@
 import { ref, watch, onBeforeUnmount, type Component } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
-import { createCharacterMention, mentionClickHandler } from '@/lib/characterMention'
+import {
+  createCharacterMention,
+  mentionClickHandler,
+  syncMentionLabels,
+  mentionNamesKey
+} from '@/lib/characterMention'
 import { useBookUiStore } from '@/stores/bookUi'
 import { usePreferencesStore } from '@/stores/preferences'
 import {
@@ -13,15 +18,22 @@ import {
   Heading3,
   Quote,
   List,
-  ListOrdered
+  ListOrdered,
+  AtSign
 } from 'lucide-vue-next'
 import { useLoreStore } from '@/stores/lore'
+import WritingTextControls from '@/components/WritingTextControls.vue'
+import LibraryStatusButton from './LibraryStatusButton.vue'
+import { TextRules } from '@/lib/textRules'
+import { useCharactersStore } from '@/stores/characters'
+import { buildRefIndex, resolveHandles } from '@/lib/mentionRefs'
 import type { LoreEntry } from '@shared/types'
 
 const props = defineProps<{ entry: LoreEntry | null }>()
 const store = useLoreStore()
 const bookUi = useBookUiStore()
 const prefs = usePreferencesStore()
+const characters = useCharactersStore()
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved'
 const status = ref<SaveStatus>('saved')
@@ -33,11 +45,20 @@ let loadingContent = false
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 const editor = useEditor({
-  extensions: [StarterKit, createCharacterMention()],
+  // @ offers the cast and every other lore entry, so entries can point at
+  // one another; the entry being edited is left out of its own list.
+  extensions: [
+    StarterKit,
+    createCharacterMention({ lore: true, excludeLoreId: () => loadedId }),
+    TextRules
+  ],
   content: '',
   editorProps: {
     attributes: { class: 'cypher-prose' },
-    handleClick: mentionClickHandler((id) => bookUi.openCharacter(id))
+    handleClick: mentionClickHandler(
+      (id) => bookUi.openCharacter(id),
+      (id) => void openLoreEntry(id)
+    )
   },
   onUpdate: () => {
     if (loadingContent) return
@@ -48,6 +69,43 @@ const editor = useEditor({
     if (status.value !== 'saved') void saveNow()
   }
 })
+
+const linkNote = ref<string | null>(null)
+let linkNoteTimer: ReturnType<typeof setTimeout> | undefined
+
+/**
+ * Converts typed @Handles in this entry into references — for text pasted in
+ * from elsewhere, or handles written before their entry existed. One
+ * transaction, so a single undo puts the text back.
+ */
+function linkHandles(): void {
+  const ed = editor.value
+  if (!ed) return
+  const index = buildRefIndex(
+    store.entries.filter((e) => e.id !== loadedId),
+    characters.characters
+  )
+  const { doc, report } = resolveHandles(ed.getJSON(), index)
+  if (report.count) ed.commands.setContent(doc, { emitUpdate: true })
+  linkNote.value = report.count
+    ? `Linked ${report.count}` + (report.unresolved.length ? ` · ${report.unresolved.length} not found` : '')
+    : report.unresolved.length
+      ? `No matches for ${report.unresolved.slice(0, 3).join(', ')}`
+      : 'No @names to link'
+  clearTimeout(linkNoteTimer)
+  linkNoteTimer = setTimeout(() => (linkNote.value = null), 4000)
+}
+
+async function saveIfDirty(): Promise<void> {
+  if (status.value !== 'saved') await saveNow()
+}
+
+/** Following a reference to another entry saves this one first. */
+async function openLoreEntry(id: number): Promise<void> {
+  if (id === loadedId) return
+  if (status.value !== 'saved') await saveNow()
+  bookUi.openLore(id)
+}
 
 function scheduleSave(): void {
   if (saveTimer) clearTimeout(saveTimer)
@@ -83,7 +141,21 @@ function loadEntry(entry: LoreEntry | null): void {
   ed.commands.setContent(content as never)
   status.value = 'saved'
   loadingContent = false
+  setTimeout(() => syncMentionLabels(editor.value), 0)
 }
+
+watch(mentionNamesKey, () => syncMentionLabels(editor.value))
+
+// Replaced from outside (a library pull): show the new text, don't save over it.
+watch(
+  () => store.externalEdit,
+  (edit) => {
+    if (!edit || edit.id !== loadedId) return
+    if (saveTimer) clearTimeout(saveTimer)
+    const fresh = store.entries.find((e) => e.id === edit.id) ?? null
+    loadEntry(fresh)
+  }
+)
 
 watch(
   () => editor.value,
@@ -194,6 +266,18 @@ const tools: Tool[] = [
       >
         <component :is="t.icon" :size="16" />
       </button>
+      <span class="mx-1 h-4 w-px shrink-0 bg-border" />
+      <button
+        class="flex items-center gap-1 rounded-md px-2 py-1.5 text-[11px] text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+        title="Turn typed @Names into links to matching entries and characters"
+        @click="linkHandles"
+      >
+        <AtSign :size="13" /> Link @names
+      </button>
+      <span v-if="linkNote" class="text-[11px] text-accent">{{ linkNote }}</span>
+      <LibraryStatusButton v-if="entry" :entry="entry" :before-push="saveIfDirty" />
+      <span class="mx-1 h-4 w-px shrink-0 bg-border" />
+      <WritingTextControls />
     </div>
 
     <div class="flex-1 overflow-auto px-6 py-8">

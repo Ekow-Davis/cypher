@@ -280,7 +280,7 @@ function registerSelectionHook(): void {
 
 async function runSearch(): Promise<void> {
   const q = query.value.trim()
-  if (q.length < 2 || !book) return
+  if (!q || !book) return
   searching.value = true
   results.value = []
   try {

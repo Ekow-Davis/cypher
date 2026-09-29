@@ -8,6 +8,15 @@ export const useLoreStore = defineStore('lore', () => {
   const bookId = ref<number | null>(null)
   const loaded = ref(false)
   const lastError = ref<string | null>(null)
+  /**
+   * Bumped when an entry's text is replaced from outside its editor (pulled
+   * from the library), so an open editor reloads instead of keeping — and
+   * later saving over — its stale copy.
+   */
+  const externalEdit = ref<{ id: number; nonce: number } | null>(null)
+  function noteExternalEdit(id: number): void {
+    externalEdit.value = { id, nonce: Date.now() }
+  }
 
   const active = computed<LoreEntry | null>(
     () => entries.value.find((e) => e.id === activeId.value) ?? null
@@ -132,6 +141,8 @@ export const useLoreStore = defineStore('lore', () => {
   }
 
   return {
+    externalEdit,
+    noteExternalEdit,
     entries,
     activeId,
     active,

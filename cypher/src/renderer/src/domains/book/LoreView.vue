@@ -9,13 +9,18 @@ import {
   ScrollText,
   AlertCircle,
   X,
-  Search
+  Search,
+  FileInput,
+  LibraryBig
 } from 'lucide-vue-next'
 import { useLoreStore } from '@/stores/lore'
 import { useBreakpoint } from '@/lib/useBreakpoint'
 import LoreEditor from './LoreEditor.vue'
 import LoreSidebar from './LoreSidebar.vue'
 import LoreSearch from './LoreSearch.vue'
+import ImportLoreDialog from './ImportLoreDialog.vue'
+import LibraryDialog from './LibraryDialog.vue'
+import { useLibraryStore } from '@/stores/library'
 
 defineProps<{ showSidebar?: boolean }>()
 
@@ -23,6 +28,18 @@ const store = useLoreStore()
 const { isTight } = useBreakpoint()
 const collapsed = reactive<Record<string, boolean>>({})
 const searching = ref(false)
+const showImport = ref(false)
+const showLibrary = ref(false)
+const library = useLibraryStore()
+const libraryNote = ref<string | null>(null)
+
+/** Sends a whole category to the shared library in one go. */
+async function sendCategory(category: string): Promise<void> {
+  const list = store.entries.filter((e) => e.category === category)
+  const n = await library.push(list)
+  libraryNote.value = `Sent ${n} entr${n === 1 ? 'y' : 'ies'} from “${category}” to the library.`
+  setTimeout(() => (libraryNote.value = null), 3500)
+}
 
 function toggle(category: string): void {
   collapsed[category] = !collapsed[category]
@@ -74,6 +91,20 @@ async function confirmNewCategory(): Promise<void> {
             </button>
             <button
               class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+              title="Lore library — share entries between books"
+              @click="showLibrary = true"
+            >
+              <LibraryBig :size="16" />
+            </button>
+            <button
+              class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
+              title="Import from Word or Markdown"
+              @click="showImport = true"
+            >
+              <FileInput :size="16" />
+            </button>
+            <button
+              class="rounded-lg p-1 text-ink-dim transition-colors hover:bg-surface-2 hover:text-ink"
               title="New category"
               @click="startNewCategory"
             >
@@ -103,6 +134,7 @@ async function confirmNewCategory(): Promise<void> {
           <p class="mt-1 text-[10px] text-ink-dim">Enter to create · Esc to cancel</p>
         </div>
 
+        <p v-if="libraryNote" class="border-b border-border bg-accent-soft px-4 py-1.5 text-[11px]">{{ libraryNote }}</p>
         <LoreSearch v-if="searching" @close="searching = false" />
 
         <div v-else class="flex-1 overflow-auto py-2">
@@ -119,6 +151,13 @@ async function confirmNewCategory(): Promise<void> {
                 {{ g.category }}
               </span>
               <span class="shrink-0 text-[10px]">{{ g.items.length }}</span>
+              <button
+                class="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-ink group-hover/cat:opacity-100"
+                title="Send this whole category to the lore library"
+                @click="sendCategory(g.category)"
+              >
+                <LibraryBig :size="13" />
+              </button>
               <button
                 class="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-ink group-hover/cat:opacity-100"
                 title="Add entry to category"
@@ -169,5 +208,16 @@ async function confirmNewCategory(): Promise<void> {
         :class="isTight ? 'cypher-drawer absolute inset-y-0 right-0 z-30 shadow-2xl' : ''"
       />
     </div>
+
+    <LibraryDialog
+      v-if="showLibrary && store.bookId !== null"
+      :book-id="store.bookId"
+      @close="showLibrary = false"
+    />
+    <ImportLoreDialog
+      v-if="showImport && store.bookId !== null"
+      :book-id="store.bookId"
+      @close="showImport = false"
+    />
   </div>
 </template>

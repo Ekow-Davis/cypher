@@ -14,6 +14,7 @@ export const PRINT_CSS = `
   ul, ol { margin: 0.6em 0 0.6em 1.4em; }
   code { font-family: Consolas, monospace; font-size: 0.9em; }
   hr { border: none; border-top: 1px solid #ccc; margin: 1.4em 0; }
+  .scene-break { text-align: center; text-indent: 0; margin: 1.4em 0; letter-spacing: .3em; }
   .mention { font-weight: 600; }
   .cover-page { page-break-after: always; text-align: center; }
   .cover-page img { max-width: 100%; max-height: 96vh; }
@@ -120,6 +121,7 @@ export const DOC_PRINT_CSS = `
   img { max-width: 100%; height: auto; }
   a { color: #1d4ed8; }
   hr { border: none; border-top: 1px solid #ccc; margin: 1em 0; }
+  .scene-break { text-align: center; text-indent: 0; margin: 1em 0; letter-spacing: .3em; }
   /* the editor's break marker becomes a genuine page break here */
   [data-page-break] { break-after: page; page-break-after: always; height: 0; }
   .toc-block { margin: 1em 0 1.4em; }

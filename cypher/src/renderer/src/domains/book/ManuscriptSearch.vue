@@ -27,6 +27,30 @@ const showReplace = ref(false)
 const replacement = ref('')
 const confirmAll = ref(false)
 
+/**
+ * The query the results are computed from, trailing the input slightly.
+ *
+ * One-character searches are allowed, and a single letter can match tens of
+ * thousands of times in a full manuscript — recomputing that on every keystroke
+ * of a longer word would make typing stutter.
+ */
+const term = ref('')
+let termTimer: ReturnType<typeof setTimeout> | undefined
+watch(query, (value) => {
+  clearTimeout(termTimer)
+  termTimer = setTimeout(() => (term.value = value.trim()), value.trim().length > 2 ? 60 : 180)
+})
+
+/** How many hits each chapter lists before a "show more" row. */
+const PAGE = 50
+const shown = ref<Record<number, number>>({})
+function limitFor(chapterId: number): number {
+  return shown.value[chapterId] ?? PAGE
+}
+function showMore(chapterId: number): void {
+  shown.value = { ...shown.value, [chapterId]: limitFor(chapterId) + PAGE * 4 }
+}
+
 onMounted(() => input.value?.focus())
 
 const scoped = computed(() => {
@@ -41,8 +65,8 @@ const scoped = computed(() => {
 
 /** Chapters with a hit, each carrying every individual occurrence. */
 const results = computed(() => {
-  const q = query.value.trim()
-  if (q.length < 2) return []
+  const q = term.value
+  if (!q) return []
   return scoped.value
     .map((chapter) => {
       const occurrences = findOccurrences(chapter.content, q)
@@ -77,9 +101,10 @@ const totalHits = computed(() => flatHits.value.length)
 const cursor = ref(-1)
 
 // A new query invalidates any position in the old result set.
-watch(query, () => {
+watch(term, () => {
   cursor.value = -1
   collapsed.value = new Set()
+  shown.value = {}
 })
 
 function goTo(position: number): void {
@@ -87,11 +112,21 @@ function goTo(position: number): void {
   const wrapped = (position + flatHits.value.length) % flatHits.value.length
   cursor.value = wrapped
   const hit = flatHits.value[wrapped]
+  // Stepping past the listed hits reveals them, so the highlight is never lost.
+  if (hit.hitIndex >= limitFor(hit.chapterId)) {
+    shown.value = { ...shown.value, [hit.chapterId]: hit.hitIndex + PAGE }
+  }
   if (store.activeId !== hit.chapterId) store.setActive(hit.chapterId)
-  bookUi.jumpToHit(hit.chapterId, query.value.trim(), hit.hitIndex)
+  bookUi.jumpToHit(hit.chapterId, term.value, hit.hitIndex)
 }
 
 function step(delta: number): void {
+  // Enter pressed before the debounce caught up: search what is typed now.
+  if (term.value !== query.value.trim()) {
+    clearTimeout(termTimer)
+    term.value = query.value.trim()
+    cursor.value = -1
+  }
   goTo(cursor.value + delta)
 }
 
@@ -114,7 +149,7 @@ function replaceCurrent(): void {
     step(1)
     return
   }
-  bookUi.requestReplace(hit.chapterId, query.value.trim(), replacement.value, hit.hitIndex)
+  bookUi.requestReplace(hit.chapterId, term.value, replacement.value, hit.hitIndex)
   // Positions shift after a replace, so re-resolve rather than assuming.
   setTimeout(() => goTo(cursor.value), 120)
 }
@@ -132,7 +167,7 @@ function replaceAll(): void {
     return
   }
   confirmAll.value = false
-  const q = query.value.trim()
+  const q = term.value
   const chapterIds = [...new Set(flatHits.value.map((h) => h.chapterId))]
   chapterIds.forEach((chapterId, i) => {
     // Staggered: each chapter must be the loaded one for its edit to apply.
@@ -252,8 +287,8 @@ function positionLabel(progress: number): string {
     </div>
 
     <div class="flex-1 overflow-auto py-2">
-      <p v-if="query.trim().length < 2" class="px-4 py-3 text-xs text-ink-dim">
-        Type at least 2 characters.
+      <p v-if="!term" class="px-4 py-3 text-xs text-ink-dim">
+        Type something to search for — a single character works too.
       </p>
 
       <template v-else>
@@ -288,7 +323,7 @@ function positionLabel(progress: number): string {
             </button>
 
             <button
-              v-for="occ in chapter.occurrences"
+              v-for="occ in chapter.occurrences.slice(0, limitFor(chapter.id))"
               :key="occ.index"
               class="mx-2 mb-1 block w-[calc(100%-1rem)] rounded-lg px-2 py-1.5 text-left transition-colors"
               :class="
@@ -307,6 +342,13 @@ function positionLabel(progress: number): string {
                 </span>
               </span>
               <p class="mt-0.5 line-clamp-2 text-xs text-ink-dim" v-html="occ.snippet"></p>
+            </button>
+            <button
+              v-if="chapter.occurrences.length > limitFor(chapter.id)"
+              class="mx-2 mb-1 block w-[calc(100%-1rem)] rounded-lg px-2 py-1 text-left text-[11px] text-accent hover:bg-surface-2"
+              @click="showMore(chapter.id)"
+            >
+              Show more ({{ chapter.occurrences.length - limitFor(chapter.id) }} left in this chapter)
             </button>
           </div>
         </div>

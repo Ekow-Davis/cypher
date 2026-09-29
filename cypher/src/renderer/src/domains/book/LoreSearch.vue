@@ -26,7 +26,7 @@ const scoped = computed(() => {
 
 const results = computed(() => {
   const q = query.value.trim()
-  if (q.length < 2) return []
+  if (!q) return []
   return scoped.value
     .map((e) => {
       const text = extractPlainText(e.content)
@@ -69,7 +69,7 @@ function toggle(id: number): void {
  */
 async function replaceAll(): Promise<void> {
   const q = query.value.trim()
-  if (q.length < 2) return
+  if (!q) return
   if (!confirmAll.value) {
     confirmAll.value = true
     setTimeout(() => (confirmAll.value = false), 4000)
@@ -163,8 +163,8 @@ async function replaceAll(): Promise<void> {
     </div>
 
     <div class="flex-1 overflow-auto py-2">
-      <p v-if="query.trim().length < 2" class="px-4 py-3 text-xs text-ink-dim">
-        Type at least 2 characters.
+      <p v-if="!query.trim()" class="px-4 py-3 text-xs text-ink-dim">
+        Type something to search for — a single character works too.
       </p>
       <template v-else>
         <div v-for="r in results" :key="r.id" class="mb-1">
@@ -187,7 +187,7 @@ async function replaceAll(): Promise<void> {
               <p class="text-xs text-ink-dim" v-html="r.titleSnippet"></p>
             </div>
             <button
-              v-for="occ in r.occurrences"
+              v-for="occ in r.occurrences.slice(0, 50)"
               :key="occ.index"
               class="mx-2 mb-1 block w-[calc(100%-1rem)] rounded-lg px-2 py-1.5 text-left hover:bg-surface-2"
               @click="store.setActive(r.id)"
@@ -198,6 +198,9 @@ async function replaceAll(): Promise<void> {
               </span>
               <p class="mt-0.5 line-clamp-2 text-xs text-ink-dim" v-html="occ.snippet"></p>
             </button>
+            <p v-if="r.occurrences.length > 50" class="mx-2 mb-1 px-2 text-[10px] text-ink-dim">
+              +{{ r.occurrences.length - 50 }} more in this entry
+            </p>
           </div>
         </div>
         <p v-if="!results.length" class="px-4 py-3 text-xs text-ink-dim">No matches.</p>

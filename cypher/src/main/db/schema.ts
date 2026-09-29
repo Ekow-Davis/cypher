@@ -447,3 +447,99 @@ export function migration019(db: Database): void {
 export function migration020(db: Database): void {
   db.exec(`ALTER TABLE books ADD COLUMN last_chapter_id INTEGER;`)
 }
+
+/**
+ * Migration 021 — the story timeline.
+ *
+ * In-world time lives in its own table rather than as columns on chapters,
+ * lore and characters: chapters sync to the server column by column, and a
+ * writer's private chronology shouldn't ride along with that. One row per
+ * dated thing; `ref_id` is null for free-standing events. `start_at`/`end_at` are
+ * plain numbers on whatever scale the book uses (years, days since the
+ * founding…) so any invented calendar can be ordered; `label` is how the date
+ * reads in-world ("Spring, 312 AE"). (`end` is an SQL keyword, hence `end_at`.)
+ */
+export function migration021(db: Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS timeline_items (
+      id         INTEGER PRIMARY KEY,
+      book_id    INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+      kind       TEXT    NOT NULL,
+      ref_id     INTEGER,
+      title      TEXT    NOT NULL DEFAULT '',
+      note       TEXT    NOT NULL DEFAULT '',
+      start_at   REAL    NOT NULL,
+      end_at     REAL,
+      label      TEXT    NOT NULL DEFAULT '',
+      color      TEXT,
+      created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_timeline_book ON timeline_items(book_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_timeline_ref ON timeline_items(book_id, kind, ref_id);
+  `)
+}
+
+/**
+ * Migration 022 — the shared lore library.
+ *
+ * A codex that belongs to no single book. Entries are copied in and out
+ * rather than shared live, so editing a place in one story never silently
+ * rewrites it in another; `library_id` remembers where a book's copy came
+ * from so the two can be compared and pushed or pulled on request.
+ */
+export function migration022(db: Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS library_lore (
+      id         INTEGER PRIMARY KEY,
+      title      TEXT    NOT NULL,
+      category   TEXT    NOT NULL DEFAULT 'General',
+      content    TEXT    NOT NULL DEFAULT '',
+      created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    ALTER TABLE lore_entries ADD COLUMN library_id INTEGER;
+  `)
+}
+
+/**
+ * Migration 023 — writing statistics (opt-in).
+ *
+ * Hourly buckets per area ('book', 'document', 'diary', 'reader', 'other') and
+ * scope (a book or document id, 0 otherwise). Only counts and durations are
+ * kept — never text — so the diary's contents stay as private as ever.
+ * Typing bursts feed the speed charts; sessions feed the session charts.
+ */
+export function migration023(db: Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stats_hourly (
+      hour           TEXT    NOT NULL,
+      area           TEXT    NOT NULL,
+      scope_id       INTEGER NOT NULL DEFAULT 0,
+      chars_typed    INTEGER NOT NULL DEFAULT 0,
+      keystrokes     INTEGER NOT NULL DEFAULT 0,
+      backspaces     INTEGER NOT NULL DEFAULT 0,
+      words_added    INTEGER NOT NULL DEFAULT 0,
+      words_deleted  INTEGER NOT NULL DEFAULT 0,
+      words_pasted   INTEGER NOT NULL DEFAULT 0,
+      active_seconds REAL    NOT NULL DEFAULT 0,
+      app_seconds    REAL    NOT NULL DEFAULT 0,
+      PRIMARY KEY (hour, area, scope_id)
+    );
+    CREATE TABLE IF NOT EXISTS stats_bursts (
+      id         INTEGER PRIMARY KEY,
+      started_at TEXT    NOT NULL,
+      seconds    REAL    NOT NULL,
+      chars      INTEGER NOT NULL,
+      area       TEXT    NOT NULL,
+      scope_id   INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS stats_sessions (
+      id             TEXT    PRIMARY KEY,
+      started_at     TEXT    NOT NULL,
+      ended_at       TEXT    NOT NULL,
+      active_seconds REAL    NOT NULL DEFAULT 0,
+      words_added    INTEGER NOT NULL DEFAULT 0,
+      words_deleted  INTEGER NOT NULL DEFAULT 0
+    );
+  `)
+}

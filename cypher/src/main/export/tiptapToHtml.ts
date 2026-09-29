@@ -1,3 +1,29 @@
+import { getLore } from '../db/repositories/lore'
+import { getCharacter } from '../db/repositories/characters'
+
+/**
+ * A mention's current name. Stored labels go stale when an entry or character
+ * is renamed and the chapter hasn't been opened since; exports look the name
+ * up fresh so they always print what the codex says now.
+ */
+export function mentionLabel(attrs: Record<string, unknown> | undefined): string {
+  const stored = String(attrs?.label ?? '')
+  const id = Number(attrs?.id)
+  if (!Number.isFinite(id)) return stored
+  try {
+    if (attrs?.kind === 'lore') return getLore(id)?.title ?? stored
+    return getCharacter(id)?.name ?? stored
+  } catch {
+    return stored
+  }
+}
+
+/** The ornament a scene break prints as. */
+export function sceneBreakGlyph(attrs: Record<string, unknown> | undefined): string {
+  const glyph = String(attrs?.glyph ?? '').trim()
+  return glyph || '* * *'
+}
+
 /**
  * Minimal Tiptap/ProseMirror JSON -> HTML renderer for export.
  * Covers what StarterKit produces plus character mentions. Unknown nodes fall
@@ -81,7 +107,9 @@ function renderNode(node: Node): string {
     case 'hardBreak':
       return '<br/>'
     case 'mention':
-      return `<span class="mention">${escapeHtml(String(node.attrs?.label ?? ''))}</span>`
+      return `<span class="mention">${escapeHtml(mentionLabel(node.attrs))}</span>`
+    case 'sceneBreak':
+      return `<p class="scene-break">${escapeHtml(sceneBreakGlyph(node.attrs))}</p>`
     case 'pageBreak':
       // print styles turn this into a real break-after: page
       return '<div data-page-break="true"></div>'
@@ -141,7 +169,7 @@ export function contentToHtml(stored: string): string {
 
 /** Block-level structure used by the docx exporter. */
 export interface Block {
-  kind: 'paragraph' | 'heading' | 'quote' | 'bullet' | 'ordered' | 'code' | 'pagebreak'
+  kind: 'paragraph' | 'heading' | 'quote' | 'bullet' | 'ordered' | 'code' | 'pagebreak' | 'scenebreak'
   level?: number
   runs: {
     text: string
@@ -179,7 +207,7 @@ function runsOf(nodes: Node[] | undefined): Block['runs'] {
       return
     }
     if (n.type === 'mention') {
-      runs.push({ text: String(n.attrs?.label ?? '') })
+      runs.push({ text: mentionLabel(n.attrs) })
       return
     }
     if (n.type === 'crossref') {
@@ -240,6 +268,9 @@ export function contentToBlocks(stored: string): Block[] {
         break
       case 'pageBreak':
         blocks.push({ kind: 'pagebreak', runs: [] })
+        break
+      case 'sceneBreak':
+        blocks.push({ kind: 'scenebreak', runs: [{ text: sceneBreakGlyph(node.attrs) }] })
         break
       case 'caption': {
         const label = `${node.attrs?.kind === 'table' ? 'Table' : 'Figure'} ${node.attrs?._n ?? ''}`.trim()

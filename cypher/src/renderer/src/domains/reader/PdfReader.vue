@@ -307,7 +307,7 @@ function highlightsFor(page: number): { rects: number[][]; color: string }[] {
 
 async function runSearch(): Promise<void> {
   const q = query.value.trim().toLowerCase()
-  if (q.length < 2 || !pdf) return
+  if (!q || !pdf) return
   searching.value = true
   results.value = []
   try {

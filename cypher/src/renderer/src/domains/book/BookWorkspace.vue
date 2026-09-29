@@ -14,7 +14,8 @@ import {
   ExternalLink,
   Share2,
   FileInput,
-  PanelLeft
+  PanelLeft,
+  CalendarRange
 } from 'lucide-vue-next'
 import { useBooksStore } from '@/stores/books'
 import { useChaptersStore } from '@/stores/chapters'
@@ -29,6 +30,9 @@ import ChapterEditor from './ChapterEditor.vue'
 import InsightsSidebar from './InsightsSidebar.vue'
 import LoreView from './LoreView.vue'
 import CharacterView from './CharacterView.vue'
+import TimelineView from './TimelineView.vue'
+import MentionHoverCard from '@/components/MentionHoverCard.vue'
+import { useTimelineStore } from '@/stores/timeline'
 import ExportDialog from './ExportDialog.vue'
 import SectionExportDialog from './SectionExportDialog.vue'
 import ShareDialog from './ShareDialog.vue'
@@ -47,6 +51,7 @@ const characters = useCharactersStore()
 const ui = useBookUiStore()
 const notes = useNotesStore()
 const app = useAppStore()
+const timeline = useTimelineStore()
 const { isNarrow, isTight } = useBreakpoint()
 
 const book = ref<Book | null>(null)
@@ -122,7 +127,10 @@ onMounted(async () => {
   // A window opened via "new window" boots straight into the right tab.
   const requested = String(route.query.tab ?? '')
   ui.setTab(
-    requested === 'lore' || requested === 'characters' || requested === 'manuscript'
+    requested === 'lore' ||
+      requested === 'characters' ||
+      requested === 'manuscript' ||
+      requested === 'timeline'
       ? requested
       : 'manuscript'
   )
@@ -133,7 +141,8 @@ onMounted(async () => {
     insights.loadForBook(id),
     lore.loadForBook(id),
     characters.loadForBook(id),
-    notes.loadForBook(id)
+    notes.loadForBook(id),
+    timeline.loadForBook(id)
   ])
 })
 </script>
@@ -163,7 +172,8 @@ onMounted(async () => {
           v-for="t in ([
             { key: 'manuscript', label: 'Manuscript', icon: BookText },
             { key: 'lore', label: 'Lore', icon: Library },
-            { key: 'characters', label: 'Characters', icon: Users }
+            { key: 'characters', label: 'Characters', icon: Users },
+            { key: 'timeline', label: 'Timeline', icon: CalendarRange }
           ] as const)"
           :key="t.key"
           class="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors sm:px-3"
@@ -298,6 +308,11 @@ onMounted(async () => {
 
     <!-- CHARACTERS -->
     <CharacterView v-else-if="ui.tab === 'characters'" />
+
+    <!-- TIMELINE -->
+    <TimelineView v-else-if="ui.tab === 'timeline'" />
+
+    <MentionHoverCard />
 
     <div
       v-if="windowNotice"

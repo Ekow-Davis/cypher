@@ -61,6 +61,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/domains/reader/ReaderView.vue')
   },
   {
+    path: '/stats',
+    name: 'stats',
+    component: () => import('@/views/StatsView.vue'),
+    meta: { title: 'Writing stats' }
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('@/views/SettingsView.vue'),

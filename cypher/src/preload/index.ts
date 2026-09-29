@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type {
   Book,
   CreateBookInput,
@@ -16,6 +16,12 @@ import type {
   Checkin,
   LoreEntry,
   CreateLoreOptions,
+  LoreImportFile,
+  TimelineItem,
+  TimelineUpsert,
+  LibraryLoreEntry,
+  StatsBatch,
+  StatsSummary,
   Character,
   CreateCharacterOptions,
   ReaderItem,
@@ -61,8 +67,20 @@ const cypher = {
     ipcRenderer.on('data:changed', (_event, scope: string) => callback(scope))
   },
 
+  /** Whole-window scale, the same mechanism as a browser's zoom. */
+  view: {
+    setZoom: (factor: number): void => webFrame.setZoomFactor(factor),
+    getZoom: (): number => webFrame.getZoomFactor(),
+    /** Ctrl +/-/0, caught in main: 1 larger, -1 smaller, 0 reset. */
+    onZoomStep: (callback: (step: 1 | -1 | 0) => void): void => {
+      ipcRenderer.on('view:zoomStep', (_event, step: 1 | -1 | 0) => callback(step))
+    }
+  },
+
   ping: (): Promise<string> => ipcRenderer.invoke('app:ping'),
   getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  /** True on the first launch on this machine — nothing to catch up on. */
+  isFreshInstall: (): Promise<boolean> => ipcRenderer.invoke('app:freshInstall'),
 
   settings: {
     get: (key: string): Promise<unknown> => ipcRenderer.invoke('settings:get', key),
@@ -173,6 +191,8 @@ const cypher = {
     get: (id: number): Promise<LoreEntry | null> => ipcRenderer.invoke('lore:get', id),
     create: (bookId: number, opts?: CreateLoreOptions): Promise<LoreEntry> =>
       ipcRenderer.invoke('lore:create', bookId, opts),
+    /** Opens a file picker and returns the chosen files converted to HTML. */
+    importPick: (): Promise<LoreImportFile[] | null> => ipcRenderer.invoke('lore:importPick'),
     rename: (id: number, title: string): Promise<LoreEntry | null> =>
       ipcRenderer.invoke('lore:rename', id, title),
     setCategory: (id: number, category: string): Promise<LoreEntry | null> =>
@@ -180,6 +200,31 @@ const cypher = {
     saveContent: (id: number, content: string): Promise<LoreEntry | null> =>
       ipcRenderer.invoke('lore:saveContent', id, content),
     remove: (id: number): Promise<void> => ipcRenderer.invoke('lore:delete', id)
+  },
+
+  timeline: {
+    list: (bookId: number): Promise<TimelineItem[]> => ipcRenderer.invoke('timeline:list', bookId),
+    upsert: (input: TimelineUpsert): Promise<TimelineItem | null> =>
+      ipcRenderer.invoke('timeline:upsert', input),
+    remove: (id: number): Promise<void> => ipcRenderer.invoke('timeline:delete', id)
+  },
+
+  library: {
+    list: (): Promise<LibraryLoreEntry[]> => ipcRenderer.invoke('library:list'),
+    /** Sends a book's entry to the library (creating or updating its linked copy). */
+    push: (loreId: number, content: string): Promise<LibraryLoreEntry | null> =>
+      ipcRenderer.invoke('library:save', loreId, content),
+    link: (loreId: number, libraryId: number | null): Promise<void> =>
+      ipcRenderer.invoke('library:setLink', loreId, libraryId),
+    rename: (id: number, title: string, category: string): Promise<LibraryLoreEntry | null> =>
+      ipcRenderer.invoke('library:rename', id, title, category),
+    remove: (id: number): Promise<void> => ipcRenderer.invoke('library:delete', id)
+  },
+
+  stats: {
+    record: (batch: StatsBatch): Promise<boolean> => ipcRenderer.invoke('stats:record', batch),
+    summary: (): Promise<StatsSummary> => ipcRenderer.invoke('stats:summary'),
+    clear: (): Promise<void> => ipcRenderer.invoke('stats:clear')
   },
 
   characters: {

@@ -38,6 +38,12 @@ function blockToParagraph(block: Block): Paragraph {
   if (block.kind === 'pagebreak') return new Paragraph({ children: [new PageBreak()] })
   const children = runsFor(block)
   switch (block.kind) {
+    case 'scenebreak':
+      return new Paragraph({
+        children,
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 240, after: 240 }
+      })
     case 'heading':
       return new Paragraph({ children, heading: HEADINGS[(block.level ?? 2) - 1] })
     case 'quote':

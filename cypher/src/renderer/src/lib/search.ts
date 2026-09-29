@@ -102,9 +102,15 @@ export function findOccurrences(contentJson: string, query: string): DocOccurren
     let at = hay.indexOf(q)
     while (at !== -1) {
       const globalAt = node.offset + at
+      const length = query.trim().length
+      // The excerpt is built only when something reads it. A one-character
+      // query can match tens of thousands of times across a manuscript, and
+      // only the handful the sidebar actually shows ever need their snippet.
       occurrences.push({
         index: occurrences.length,
-        snippet: snippetAround(flat, globalAt, query.trim().length),
+        get snippet() {
+          return snippetAround(flat, globalAt, length)
+        },
         progress: flat.length ? globalAt / flat.length : 0
       })
       at = hay.indexOf(q, at + q.length)

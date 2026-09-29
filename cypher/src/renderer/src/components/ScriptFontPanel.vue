@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Type, Upload, Trash2, Check, Plus, Pencil } from 'lucide-vue-next'
 import { applyScriptFont } from '@/lib/scriptFont'
 import { useFontsStore } from '@/stores/fonts'
 import { usePreferencesStore } from '@/stores/preferences'
+import { WRITING_FONTS, libraryChoices } from '@/lib/fontChoices'
 
 const fonts = useFontsStore()
+const writingChoices = computed(() => [...WRITING_FONTS, ...libraryChoices(fonts.library)])
 const prefs = usePreferencesStore()
 const renaming = ref<string | null>(null)
 const renameDraft = ref('')
@@ -184,11 +186,8 @@ onMounted(async () => {
           :value="prefs.editorFont"
           @change="prefs.setEditorFont(($event.target as HTMLSelectElement).value)"
         >
-          <option value="">Default (Georgia)</option>
-          <option value="system-ui, -apple-system, sans-serif">System sans</option>
-          <option value="'Courier New', Courier, monospace">Monospace</option>
-          <option v-for="f in fonts.library" :key="f.id" :value="`'${f.family}'`">
-            {{ f.family }}
+          <option v-for="c in writingChoices" :key="c.value" :value="c.value">
+            {{ c.label }}
           </option>
         </select>
       </div>

@@ -28,6 +28,9 @@ declare module '@tiptap/core' {
       insertCrossReference: (targetId: string, kind: RefKind, display: string) => ReturnType
       insertCaption: (kind: 'figure' | 'table', captionId: string) => ReturnType
     }
+    sceneBreak: {
+      insertSceneBreak: (glyph?: string) => ReturnType
+    }
     cypherFontSize: {
       setFontSize: (size: string) => ReturnType
       unsetFontSize: () => ReturnType

@@ -16,6 +16,8 @@ import {
 } from 'lucide-vue-next'
 import { useCharactersStore } from '@/stores/characters'
 import { assetUrl } from '@/lib/assets'
+import BacklinksPanel from './BacklinksPanel.vue'
+import WhenField from './WhenField.vue'
 import { defaultCharacterSheet } from '../../../../shared/characterTemplate'
 import type { Character, CharacterSheet, CharacterSection, CharacterField } from '@shared/types'
 
@@ -222,6 +224,9 @@ onBeforeUnmount(() => {
             <option v-for="fn in store.folderNames" :key="fn" :value="fn" />
           </datalist>
         </div>
+        <div class="mt-2">
+          <WhenField :key="props.character.id" kind="character" :ref-id="props.character.id" />
+        </div>
       </div>
 
       <div class="flex shrink-0 items-center gap-2">
@@ -375,6 +380,7 @@ onBeforeUnmount(() => {
             </div>
             <p v-if="!section.fields.length" class="text-xs text-ink-dim">No fields in this section.</p>
           </section>
+          <BacklinksPanel :key="props.character.id" kind="character" :id="props.character.id" />
         </template>
       </div>
     </div>

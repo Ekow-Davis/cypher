@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { PALETTES } from '@/lib/palettes'
-import { Check, Database, Palette, PenLine, ShieldCheck, Info } from 'lucide-vue-next'
+import { RELEASE_NOTES } from '@/lib/whatsNew'
+import { Check, Database, Palette, PenLine, ShieldCheck, Info, ChartLine } from 'lucide-vue-next'
 import DataSafetyPanel from '@/components/DataSafetyPanel.vue'
 import ScriptFontPanel from '@/components/ScriptFontPanel.vue'
 import DiarySecurityPanel from '@/components/DiarySecurityPanel.vue'
@@ -10,6 +11,10 @@ import UpdatePanel from '@/components/UpdatePanel.vue'
 import AccountPanel from '@/components/AccountPanel.vue'
 import WritingAidsPanel from '@/components/WritingAidsPanel.vue'
 import TrashPanel from '@/components/TrashPanel.vue'
+import ReadabilityPanel from '@/components/ReadabilityPanel.vue'
+import InputExtrasPanel from '@/components/InputExtrasPanel.vue'
+import StatsSettingsPanel from '@/components/StatsSettingsPanel.vue'
+import TextRulesPanel from '@/components/TextRulesPanel.vue'
 import { usePreferencesStore, type FocusWidth } from '@/stores/preferences'
 import { useAppStore } from '@/stores/app'
 import {
@@ -25,11 +30,12 @@ const theme = useThemeStore()
 const prefs = usePreferencesStore()
 const appStore = useAppStore()
 
-type SectionKey = 'appearance' | 'writing' | 'data' | 'about'
+type SectionKey = 'appearance' | 'writing' | 'stats' | 'data' | 'about'
 const section = ref<SectionKey>('appearance')
 const SECTIONS: { key: SectionKey; label: string; icon: typeof Palette }[] = [
   { key: 'appearance', label: 'Appearance', icon: Palette },
   { key: 'writing', label: 'Writing', icon: PenLine },
+  { key: 'stats', label: 'Stats', icon: ChartLine },
   { key: 'data', label: 'Data', icon: ShieldCheck },
   { key: 'about', label: 'About', icon: Info }
 ]
@@ -116,6 +122,7 @@ onMounted(async () => {
       </button>
     </nav>
 
+    <ReadabilityPanel v-show="section === 'appearance'" class="mb-6" />
     <ScriptFontPanel v-show="section === 'appearance'" class="mb-6" />
     <div v-show="section === 'appearance'" class="rounded-2xl border border-border bg-surface p-6">
       <h2 class="mb-1 text-lg font-semibold">Appearance</h2>
@@ -378,6 +385,10 @@ onMounted(async () => {
         Check spelling while writing
       </label>
     </div>
+    <TextRulesPanel v-show="section === 'writing'" class="mt-6" />
+    <InputExtrasPanel v-show="section === 'writing'" class="mt-6" />
+
+    <StatsSettingsPanel v-show="section === 'stats'" />
 
     <!-- ABOUT -->
     <div v-show="section === 'about'" class="rounded-2xl border border-border bg-surface p-6">
@@ -387,9 +398,18 @@ onMounted(async () => {
       </div>
       <p class="mb-4 text-sm text-ink-dim">Cypher — a private journal and writing studio.</p>
       <div class="space-y-2 text-sm">
-        <div class="flex justify-between gap-4">
+        <div class="flex items-center justify-between gap-4">
           <span class="text-ink-dim">Version</span>
-          <span class="font-medium">{{ appStore.version || '—' }}</span>
+          <span class="flex items-center gap-3">
+            <button
+              v-if="RELEASE_NOTES.length"
+              class="text-xs text-accent hover:underline"
+              @click="appStore.showWhatsNew(RELEASE_NOTES.slice(0, 3))"
+            >
+              What's new
+            </button>
+            <span class="font-medium">{{ appStore.version || '—' }}</span>
+          </span>
         </div>
         <div class="flex justify-between gap-4">
           <span class="text-ink-dim">Schema version</span>

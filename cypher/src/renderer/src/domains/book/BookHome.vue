@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { ChartLine } from 'lucide-vue-next'
+import { usePreferencesStore } from '@/stores/preferences'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Settings2, PenLine } from 'lucide-vue-next'
 import { useBooksStore } from '@/stores/books'
 import { assetUrl } from '@/lib/assets'
 
+const prefs = usePreferencesStore()
 const router = useRouter()
 const store = useBooksStore()
 
@@ -159,5 +162,15 @@ async function confirmCreate(): Promise<void> {
         </div>
       </div>
     </div>
+
+    <!-- writing stats, once switched on -->
+    <button
+      v-if="prefs.statsEnabled"
+      class="fixed bottom-5 left-24 z-30 flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2.5 text-sm font-medium shadow-lg transition-transform hover:-translate-y-0.5 hover:border-accent-line"
+      title="Your writing stats"
+      @click="$router.push('/stats')"
+    >
+      <ChartLine :size="16" class="text-accent" /> Stats
+    </button>
   </section>
 </template>

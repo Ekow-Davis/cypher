@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { Library, Layers, FileText } from 'lucide-vue-next'
 import { useLoreStore } from '@/stores/lore'
 import { extractPlainText } from '@/lib/textStats'
+import BacklinksPanel from './BacklinksPanel.vue'
+import WhenField from './WhenField.vue'
 
 const store = useLoreStore()
 
@@ -74,7 +76,12 @@ function jumpToCategory(category: string): void {
           <span class="rounded-full bg-surface-2 px-2 py-0.5">{{ store.active.category }}</span>
           <span class="tabular-nums">{{ activeWordCount.toLocaleString() }} words</span>
         </div>
+        <div class="mt-2">
+          <WhenField :key="store.active.id" kind="lore" :ref-id="store.active.id" />
+        </div>
       </section>
+
+      <BacklinksPanel v-if="store.active" :key="store.active.id" kind="lore" :id="store.active.id" compact />
     </div>
   </aside>
 </template>

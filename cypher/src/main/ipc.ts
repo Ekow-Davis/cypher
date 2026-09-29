@@ -1,6 +1,6 @@
 import { app, ipcMain } from 'electron'
 import { readFile } from 'node:fs/promises'
-import { getSetting, getAllSettings, setSetting } from './settings'
+import { getSetting, getAllSettings, setSetting, isFreshInstall } from './settings'
 import { getDatabaseInfo } from './db'
 import {
   listBooks,
@@ -55,6 +55,17 @@ import {
   setSpellcheckEnabled,
   isSpellcheckEnabled
 } from './contextMenu'
+import { pickLoreFiles } from './import/importLore'
+import { listTimeline, upsertTimeline, deleteTimeline } from './db/repositories/timeline'
+import {
+  listLibrary,
+  pushToLibrary,
+  linkLoreToLibrary,
+  renameLibraryEntry,
+  deleteLibraryEntry
+} from './db/repositories/library'
+import { recordStats, statsSummary, clearStats } from './db/repositories/stats'
+import type { TimelineUpsert, StatsBatch } from '@shared/types'
 import { lookupWord, thesaurusEnabled } from './thesaurus'
 import {
   makeBookOnline,
@@ -285,6 +296,7 @@ export function registerIpcHandlers(): void {
   // App / diagnostics
   handle('app:ping', () => 'pong')
   handle('app:version', () => app.getVersion())
+  handle('app:freshInstall', () => isFreshInstall())
   handle('db:info', () => getDatabaseInfo())
 
   // Settings
@@ -318,6 +330,8 @@ export function registerIpcHandlers(): void {
   handle('chapters:applyOrder', (_e, items: ChapterPlacement[]) => applyChapterOrder(items))
   handle('characters:template', () => exportCharacterTemplate())
   handle('characters:importSheets', () => importCharacterSheets())
+  // Read-only: picks and converts files; entries are created by the renderer.
+  ipcMain.handle('lore:importPick', () => pickLoreFiles())
   handle('chapters:importPick', () => importManuscript())
   handle(
     'chapters:importApply',
@@ -395,6 +409,27 @@ export function registerIpcHandlers(): void {
     saveLoreContent(id, content)
   )
   handle('lore:delete', (_e, id: number) => deleteLore(id))
+
+  // Timeline
+  handle('timeline:list', (_e, bookId: number) => listTimeline(bookId))
+  handle('timeline:upsert', (_e, input: TimelineUpsert) => upsertTimeline(input))
+  handle('timeline:delete', (_e, id: number) => deleteTimeline(id))
+
+  // Lore library (shared across books)
+  handle('library:list', () => listLibrary())
+  handle('library:save', (_e, loreId: number, content: string) => pushToLibrary(loreId, content))
+  handle('library:setLink', (_e, loreId: number, libraryId: number | null) =>
+    linkLoreToLibrary(loreId, libraryId)
+  )
+  handle('library:rename', (_e, id: number, title: string, category: string) =>
+    renameLibraryEntry(id, title, category)
+  )
+  handle('library:delete', (_e, id: number) => deleteLibraryEntry(id))
+
+  // Writing statistics (recorded only when the writer has turned them on)
+  handle('stats:record', (_e, batch: StatsBatch) => recordStats(batch))
+  handle('stats:summary', () => statsSummary())
+  handle('stats:clear', () => clearStats())
 
   // Characters
   handle('characters:list', (_e, bookId: number) => listCharacters(bookId))

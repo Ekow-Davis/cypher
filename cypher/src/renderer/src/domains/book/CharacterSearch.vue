@@ -46,7 +46,7 @@ const nameResults = computed(() => {
 
 const detailResults = computed(() => {
   const q = query.value.trim()
-  if (q.length < 2) return []
+  if (!q) return []
   return detailIndex.value
     .map(({ character, fields }) => {
       const hits = fields
@@ -63,7 +63,7 @@ const detailResults = computed(() => {
 })
 
 const results = computed(() => (mode.value === 'name' ? nameResults.value : detailResults.value))
-const minChars = computed(() => (mode.value === 'name' ? 1 : 2))
+const minChars = 1
 
 const showReplace = ref(false)
 const replacement = ref('')
@@ -81,7 +81,7 @@ const lastResult = ref<string | null>(null)
  */
 async function replaceAll(): Promise<void> {
   const q = query.value.trim()
-  if (q.length < minChars.value) return
+  if (q.length < minChars) return
   if (!confirmAll.value) {
     confirmAll.value = true
     setTimeout(() => (confirmAll.value = false), 4000)
@@ -204,7 +204,7 @@ async function replaceAll(): Promise<void> {
 
     <div class="flex-1 overflow-auto py-2">
       <p v-if="query.trim().length < minChars" class="px-4 py-3 text-xs text-ink-dim">
-        Type at least {{ minChars }} character{{ minChars > 1 ? 's' : '' }}.
+        Type something to search for — a single character works too.
       </p>
       <template v-else>
         <button
