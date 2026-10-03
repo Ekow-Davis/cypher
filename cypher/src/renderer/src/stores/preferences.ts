@@ -152,8 +152,15 @@ export const usePreferencesStore = defineStore('preferences', () => {
   }
 
   async function persist(): Promise<void> {
-    try {
-      await window.cypher.settings.set(KEY, {
+    // Before load() finishes, the refs still hold defaults — writing them now
+    // would overwrite the real saved preferences with factory values.
+    if (!loaded.value) return
+    // Several of these refs hold objects and arrays, which Vue wraps in
+    // reactive Proxies. A Proxy can't cross the context bridge ("An object
+    // could not be cloned"), so the whole save used to fail silently. A JSON
+    // round-trip hands the bridge plain data instead.
+    const payload = JSON.parse(
+      JSON.stringify({
         autosaveMs: autosaveMs.value,
         spellcheck: spellcheck.value,
         focusWidth: focusWidth.value,
@@ -175,8 +182,11 @@ export const usePreferencesStore = defineStore('preferences', () => {
         textRules: textRules.value,
         textRulesOn: textRulesOn.value
       })
-    } catch {
-      /* non-fatal */
+    )
+    try {
+      await window.cypher.settings.set(KEY, payload)
+    } catch (error) {
+      console.error('[preferences] save failed:', error)
     }
   }
 

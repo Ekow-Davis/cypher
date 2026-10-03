@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron'
+import { loadHtml } from './loadHtml'
 
 /**
  * Sends HTML to the system print dialog.
@@ -21,8 +22,9 @@ export async function printHtml(
     show: false,
     webPreferences: { offscreen: false, javascript: false }
   })
+  let cleanup = (): void => {}
   try {
-    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+    cleanup = await loadHtml(win, html)
     const result = await new Promise<{ ok: boolean; reason?: string }>((resolve) => {
       win.webContents.print({ silent: false, printBackground: true }, (success, failureReason) => {
         resolve(success ? { ok: true } : { ok: false, reason: failureReason })
@@ -35,6 +37,7 @@ export async function printHtml(
     // Give the print job a moment to hand off before tearing the window down.
     setTimeout(() => {
       if (!win.isDestroyed()) win.destroy()
+      cleanup()
     }, 1500)
   }
 }
@@ -48,8 +51,9 @@ export async function previewHtml(
     show: false,
     webPreferences: { offscreen: true, javascript: false }
   })
+  let cleanup = (): void => {}
   try {
-    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+    cleanup = await loadHtml(win, html)
     const pdf = await win.webContents.printToPDF({
       printBackground: true,
       pageSize: 'Letter',
@@ -64,5 +68,6 @@ export async function previewHtml(
     return null
   } finally {
     win.destroy()
+    cleanup()
   }
 }

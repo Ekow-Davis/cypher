@@ -223,6 +223,8 @@ const cypher = {
 
   stats: {
     record: (batch: StatsBatch): Promise<boolean> => ipcRenderer.invoke('stats:record', batch),
+    /** Blocking send for the window's last flush, so it lands before the app quits. */
+    recordSync: (batch: StatsBatch): boolean => ipcRenderer.sendSync('stats:record-sync', batch),
     summary: (): Promise<StatsSummary> => ipcRenderer.invoke('stats:summary'),
     clear: (): Promise<void> => ipcRenderer.invoke('stats:clear')
   },

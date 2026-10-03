@@ -253,7 +253,8 @@ const lastValues = new WeakMap<HTMLTextAreaElement, string>()
 
 // ---------- flushing ----------
 
-async function flush(): Promise<void> {
+/** Takes everything buffered so far as one batch, or null when there's nothing. */
+function takeBatch(): StatsBatch | null {
   if (burst && Date.now() - burst.last > 5000) closeBurst()
   const hours = [...rows.values()].filter(
     (r) =>
@@ -266,11 +267,33 @@ async function flush(): Promise<void> {
   }
   rows.clear()
   if (session) delete (batch.sessions[0] as Partial<typeof session>).lastAt
-  if (!batch.hours.length && !batch.bursts.length && !batch.sessions.length) return
+  if (!batch.hours.length && !batch.bursts.length && !batch.sessions.length) return null
+  return batch
+}
+
+async function flush(): Promise<void> {
+  const batch = takeBatch()
+  if (!batch) return
   try {
     await window.cypher.stats.record(batch)
   } catch {
     /* a lost half-minute of statistics is not worth an error */
+  }
+}
+
+/**
+ * The last flush, as the window closes. An async send can still be in flight
+ * when the app quits and the database shuts, so the final stretch of writing
+ * went missing; a synchronous send holds the window until it's written.
+ */
+function flushOnClose(): void {
+  closeBurst()
+  const batch = takeBatch()
+  if (!batch) return
+  try {
+    window.cypher.stats.recordSync(batch)
+  } catch {
+    /* older preload — nothing more to be done while closing */
   }
 }
 
@@ -371,7 +394,7 @@ export function installStatsTracker(r: Router): void {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') void flush()
   })
-  window.addEventListener('beforeunload', () => void flush())
+  window.addEventListener('beforeunload', flushOnClose)
 }
 
 /** Sends whatever is buffered now — before opening the stats page, say. */

@@ -10,6 +10,7 @@ import { applyScriptFont } from '@/lib/scriptFont'
 import { useFontsStore } from '@/stores/fonts'
 import { useTimelineStore } from '@/stores/timeline'
 import { useLibraryStore } from '@/stores/library'
+import { usePreferencesStore } from '@/stores/preferences'
 
 /**
  * Keeps windows in step. Main broadcasts which slice of data changed; this
@@ -73,6 +74,10 @@ export function installSync(): void {
           await documents.refresh(documents.openId)
           break
         case 'marks':
+          break
+        case 'prefs':
+          // Another window changed an editor preference; take its copy.
+          await usePreferencesStore().load()
           break
         case 'trash':
           // A restore or purge can touch anything, so re-read what's loaded.

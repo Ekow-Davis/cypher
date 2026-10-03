@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs'
+import { loadHtml } from '../loadHtml'
 import { dialog, BrowserWindow } from 'electron'
 import {
   Document,
@@ -208,8 +209,9 @@ export async function exportDocumentAs(
         show: false,
         webPreferences: { offscreen: true, javascript: false }
       })
+      let cleanup = (): void => {}
       try {
-        await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+        cleanup = await loadHtml(win, html)
         const pdf = await win.webContents.printToPDF({
           printBackground: true,
           pageSize: 'Letter',
@@ -218,6 +220,7 @@ export async function exportDocumentAs(
         writeFileSync(picked.filePath, pdf)
       } finally {
         win.destroy()
+        cleanup()
       }
     }
     return { path: picked.filePath }

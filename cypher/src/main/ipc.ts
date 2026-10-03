@@ -302,7 +302,14 @@ export function registerIpcHandlers(): void {
   // Settings
   handle('settings:get', (_e, key: string) => getSetting(key))
   handle('settings:getAll', () => getAllSettings())
-  handle('settings:set', (_e, key: string, value: unknown) => setSetting(key, value))
+  handle('settings:set', (e, key: string, value: unknown) => {
+    const ok = setSetting(key, value)
+    // Editor preferences are saved as one object, so a window holding an older
+    // copy would write it back over a change made elsewhere (turning stats off
+    // again, say). Tell the other windows to re-read theirs.
+    if (key === 'editorPrefs') broadcastDataChanged('prefs', e.sender.id)
+    return ok
+  })
 
   // Books
   handle('books:list', (_e, includeArchived?: boolean) => listBooks(!!includeArchived))
@@ -428,6 +435,16 @@ export function registerIpcHandlers(): void {
 
   // Writing statistics (recorded only when the writer has turned them on)
   handle('stats:record', (_e, batch: StatsBatch) => recordStats(batch))
+  // The closing window's final batch, sent synchronously so it's written
+  // before will-quit closes the database.
+  ipcMain.on('stats:record-sync', (e, batch: StatsBatch) => {
+    try {
+      e.returnValue = recordStats(batch)
+    } catch (error) {
+      console.error('[stats] final flush failed:', error)
+      e.returnValue = false
+    }
+  })
   handle('stats:summary', () => statsSummary())
   handle('stats:clear', () => clearStats())
 

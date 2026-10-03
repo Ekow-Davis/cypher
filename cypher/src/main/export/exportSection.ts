@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs'
+import { loadHtml } from '../loadHtml'
 import { BrowserWindow } from 'electron'
 import {
   Document,
@@ -248,10 +249,9 @@ export async function exportSectionPdf(
     show: false,
     webPreferences: { offscreen: true, javascript: false }
   })
+  let cleanup = (): void => {}
   try {
-    await win.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(sectionHtml(doc, options))}`
-    )
+    cleanup = await loadHtml(win, sectionHtml(doc, options))
     const base = {
       printBackground: true,
       pageSize: 'A4' as const,
@@ -266,5 +266,6 @@ export async function exportSectionPdf(
     writeFileSync(destination, pdf)
   } finally {
     win.destroy()
+    cleanup()
   }
 }
