@@ -1,4 +1,5 @@
-import { shell, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
+import { openExternalSafely } from './security'
 import { join } from 'node:path'
 import { attachContextMenu } from './contextMenu'
 import icon from '../../build/icon.png?asset'
@@ -89,8 +90,10 @@ export function createWindow(route = '/'): BrowserWindow | null {
   })
 
   window.on('ready-to-show', () => window.show())
+  // Same rule as the app-wide guard in security.ts: links go to the browser
+  // (http, https, mailto only), never to a new window or another app.
   window.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    openExternalSafely(url)
     return { action: 'deny' }
   })
 

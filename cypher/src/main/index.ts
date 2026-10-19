@@ -9,6 +9,7 @@ import { registerAssetSchemePrivileged, registerAssetProtocol } from './assets'
 import { createWindow } from './windows'
 import { redirectPortableStorage } from './portable'
 import { startSyncScheduler, stopSyncScheduler } from './sync'
+import { installSecurityGuards } from './security'
 
 // Must run before anything else touches app.getPath('userData') — including
 // the scheme registration below, which is why it comes first in the file.
@@ -16,6 +17,9 @@ redirectPortableStorage()
 
 // Privileged schemes must be declared before the app is ready.
 registerAssetSchemePrivileged()
+
+// Navigation, pop-up, webview and permission guards for every window.
+installSecurityGuards()
 
 app.whenReady().then(() => {
   initDatabase()

@@ -16,11 +16,29 @@ export interface Book {
   language: string
   created_at: string
   archived: number // SQLite has no boolean: 0 | 1
+  /** Shelf folder, local to this machine; null when the book sits loose. */
+  folder_id?: number | null
+  /** Shelf summaries, filled by the list query only. */
+  word_count?: number
+  chapter_count?: number
+  /** Latest chapter edit, or the creation date for an empty book. */
+  last_edited?: string
+}
+
+/** A local group of books on the shelf. */
+export interface ShelfFolder {
+  id: number
+  name: string
+  sort_order: number
+  created_at: string
 }
 
 export interface CreateBookInput {
   title: string
   subtitle?: string | null
+  /** Asset ref from books.importCover, chosen in the create dialog. */
+  cover_path?: string | null
+  folder_id?: number | null
 }
 
 export interface UpdateBookInput {
