@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
   Trash2,
   Archive,
+  ArchiveRestore,
   BookText,
   Feather,
   AlertTriangle
@@ -27,6 +28,7 @@ const loaded = ref(false)
 const saving = ref(false)
 const confirmDelete = ref(false)
 const coverPath = ref<string | null>(null)
+const isArchived = ref(false)
 
 const form = reactive({
   title: '',
@@ -60,6 +62,7 @@ function hydrate(b: Book): void {
   form.genre = b.genre ?? ''
   form.language = b.language || 'en'
   coverPath.value = b.cover_path
+  isArchived.value = !!b.archived
 }
 
 onMounted(async () => {
@@ -99,6 +102,11 @@ async function removeBook(): Promise<void> {
 async function archiveBook(): Promise<void> {
   await store.archive(id, true)
   void router.push('/book')
+}
+
+async function unarchiveBook(): Promise<void> {
+  await store.archive(id, false)
+  isArchived.value = false
 }
 </script>
 
@@ -319,11 +327,19 @@ async function archiveBook(): Promise<void> {
       <div v-show="pane === 'danger'" class="rounded-2xl border border-border bg-surface p-6">
         <h2 class="mb-1 text-lg font-semibold">Danger zone</h2>
         <p class="mb-5 text-sm text-ink-dim">
-          Archiving hides the book from the shelf. Deleting moves it to the trash, where it can be
-          restored.
+          Archiving moves the book off the main shelf into Archived, where you can bring it back.
+          Deleting moves it to the trash, where it can be restored.
         </p>
         <div class="max-w-xs space-y-2">
           <button
+            v-if="isArchived"
+            class="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-surface-2 py-2 text-sm font-medium transition-colors hover:text-ink"
+            @click="unarchiveBook"
+          >
+            <ArchiveRestore :size="16" /> Move back to the shelf
+          </button>
+          <button
+            v-else
             class="flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-surface-2 py-2 text-sm font-medium transition-colors hover:text-ink"
             @click="archiveBook"
           >

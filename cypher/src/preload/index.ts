@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type {
   Book,
+  ShelfFolder,
   CreateBookInput,
   UpdateBookInput,
   Chapter,
@@ -106,7 +107,18 @@ const cypher = {
     archive: (id: number, archived: boolean): Promise<Book | null> =>
       ipcRenderer.invoke('books:archive', id, archived),
     remove: (id: number): Promise<void> => ipcRenderer.invoke('books:delete', id),
-    importCover: (): Promise<string | null> => ipcRenderer.invoke('books:importCover')
+    importCover: (): Promise<string | null> => ipcRenderer.invoke('books:importCover'),
+    setFolder: (bookId: number, folderId: number | null): Promise<Book | null> =>
+      ipcRenderer.invoke('books:setFolder', bookId, folderId)
+  },
+
+  shelf: {
+    folders: (): Promise<ShelfFolder[]> => ipcRenderer.invoke('shelf:folders'),
+    createFolder: (name: string): Promise<ShelfFolder> =>
+      ipcRenderer.invoke('shelf:create', name),
+    renameFolder: (id: number, name: string): Promise<ShelfFolder | null> =>
+      ipcRenderer.invoke('shelf:rename', id, name),
+    deleteFolder: (id: number): Promise<void> => ipcRenderer.invoke('shelf:delete', id)
   },
 
   chapters: {

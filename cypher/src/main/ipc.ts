@@ -8,9 +8,13 @@ import {
   createBook,
   updateBook,
   archiveBook,
-  deleteBook
-,
-  setLastChapter
+  deleteBook,
+  setLastChapter,
+  listFolders,
+  createFolder,
+  renameFolder,
+  deleteFolder,
+  setBookFolder
 } from './db/repositories/books'
 import {
   listChapters,
@@ -319,6 +323,15 @@ export function registerIpcHandlers(): void {
   handle('books:archive', (_e, id: number, archived: boolean) => archiveBook(id, archived))
   handle('books:delete', (_e, id: number) => deleteBook(id))
   handle('books:importCover', () => importCover())
+  // Shelf folders. 'books:setFolder' broadcasts as a books change; the
+  // 'shelf:' mutations broadcast as 'shelf', which reloads the shelf too.
+  handle('books:setFolder', (_e, bookId: number, folderId: number | null) =>
+    setBookFolder(bookId, folderId)
+  )
+  handle('shelf:folders', () => listFolders())
+  handle('shelf:create', (_e, name: string) => createFolder(name))
+  handle('shelf:rename', (_e, id: number, name: string) => renameFolder(id, name))
+  handle('shelf:delete', (_e, id: number) => deleteFolder(id))
 
   // Chapters
   handle('chapters:list', (_e, bookId: number) => listChapters(bookId))

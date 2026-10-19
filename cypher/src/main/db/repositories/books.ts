@@ -1,6 +1,6 @@
 import { markDirty } from '../../sync'
 import { getDb } from '../index'
-import type { Book, CreateBookInput, UpdateBookInput } from '@shared/types'
+import type { Book, CreateBookInput, ShelfFolder, UpdateBookInput } from '@shared/types'
 
 /**
  * Books repository. This is the template every other entity (chapters,
@@ -22,9 +22,22 @@ const UPDATABLE = [
 ] as const
 
 export function listBooks(includeArchived = false): Book[] {
-  const sql = includeArchived
-    ? 'SELECT * FROM books WHERE deleted_at IS NULL ORDER BY created_at DESC'
-    : 'SELECT * FROM books WHERE deleted_at IS NULL AND archived = 0 ORDER BY created_at DESC'
+  // The shelf shows word counts and sorts by last edit, so the list carries
+  // a small summary per book rather than the shelf asking chapter by chapter.
+  const sql = `
+    SELECT b.*,
+           COALESCE(c.words, 0)               AS word_count,
+           COALESCE(c.n, 0)                   AS chapter_count,
+           COALESCE(c.edited, b.created_at)   AS last_edited
+      FROM books b
+      LEFT JOIN (
+        SELECT book_id, SUM(word_count) AS words, COUNT(*) AS n, MAX(updated_at) AS edited
+          FROM chapters
+         WHERE deleted_at IS NULL
+         GROUP BY book_id
+      ) c ON c.book_id = b.id
+     WHERE b.deleted_at IS NULL ${includeArchived ? '' : 'AND b.archived = 0'}
+     ORDER BY b.created_at DESC`
   return getDb().prepare(sql).all() as Book[]
 }
 
@@ -34,8 +47,13 @@ export function getBook(id: number): Book | null {
 
 export function createBook(input: CreateBookInput): Book {
   const info = getDb()
-    .prepare('INSERT INTO books (title, subtitle) VALUES (?, ?)')
-    .run(input.title.trim() || 'Untitled', input.subtitle ?? null)
+    .prepare('INSERT INTO books (title, subtitle, cover_path, folder_id) VALUES (?, ?, ?, ?)')
+    .run(
+      input.title.trim() || 'Untitled',
+      input.subtitle ?? null,
+      input.cover_path ?? null,
+      input.folder_id ?? null
+    )
   return getBook(Number(info.lastInsertRowid)) as Book
 }
 
@@ -71,4 +89,45 @@ export function archiveBook(id: number, archived: boolean): Book | null {
 /** Soft delete — the book moves to the trash and can be restored. */
 export function deleteBook(id: number): void {
   getDb().prepare("UPDATE books SET deleted_at = datetime('now') WHERE id = ?").run(id)
+}
+
+// ---------- shelf folders (local only — never marked dirty, never synced) ----------
+
+export function listFolders(): ShelfFolder[] {
+  return getDb()
+    .prepare('SELECT * FROM shelf_folders ORDER BY sort_order ASC, name COLLATE NOCASE ASC')
+    .all() as ShelfFolder[]
+}
+
+export function createFolder(name: string): ShelfFolder {
+  const db = getDb()
+  const next = (
+    db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM shelf_folders').get() as {
+      n: number
+    }
+  ).n
+  const info = db
+    .prepare('INSERT INTO shelf_folders (name, sort_order) VALUES (?, ?)')
+    .run(name.trim() || 'New folder', next)
+  return db.prepare('SELECT * FROM shelf_folders WHERE id = ?').get(info.lastInsertRowid) as ShelfFolder
+}
+
+export function renameFolder(id: number, name: string): ShelfFolder | null {
+  const db = getDb()
+  if (name.trim()) db.prepare('UPDATE shelf_folders SET name = ? WHERE id = ?').run(name.trim(), id)
+  return (db.prepare('SELECT * FROM shelf_folders WHERE id = ?').get(id) as ShelfFolder) ?? null
+}
+
+/** Removes the folder only; its books go back to sitting loose on the shelf. */
+export function deleteFolder(id: number): void {
+  const db = getDb()
+  db.transaction(() => {
+    db.prepare('UPDATE books SET folder_id = NULL WHERE folder_id = ?').run(id)
+    db.prepare('DELETE FROM shelf_folders WHERE id = ?').run(id)
+  })()
+}
+
+export function setBookFolder(bookId: number, folderId: number | null): Book | null {
+  getDb().prepare('UPDATE books SET folder_id = ? WHERE id = ?').run(folderId, bookId)
+  return getBook(bookId)
 }

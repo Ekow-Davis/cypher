@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount, type Component } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, type Component } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import {
@@ -23,6 +23,7 @@ import {
 } from 'lucide-vue-next'
 import { useLoreStore } from '@/stores/lore'
 import WritingTextControls from '@/components/WritingTextControls.vue'
+import { useTextColumn } from '@/lib/textColumn'
 import LibraryStatusButton from './LibraryStatusButton.vue'
 import { TextRules } from '@/lib/textRules'
 import { useCharactersStore } from '@/stores/characters'
@@ -217,6 +218,9 @@ const tools: Tool[] = [
   { label: 'Bullet list', name: 'bulletList', icon: List, run: () => editor.value?.chain().focus().toggleBulletList().run() },
   { label: 'Numbered list', name: 'orderedList', icon: ListOrdered, run: () => editor.value?.chain().focus().toggleOrderedList().run() }
 ]
+
+// Same column width and gutter as the manuscript; lore has no focus mode.
+const { columnStyle, surfaceStyle } = useTextColumn(computed(() => false))
 </script>
 
 <template>
@@ -280,8 +284,8 @@ const tools: Tool[] = [
       <WritingTextControls />
     </div>
 
-    <div class="flex-1 overflow-auto px-6 py-8">
-      <EditorContent :editor="editor" class="mx-auto max-w-prose" />
+    <div class="flex-1 overflow-auto py-8" :style="surfaceStyle">
+      <EditorContent :editor="editor" :style="columnStyle" />
     </div>
   </div>
 </template>

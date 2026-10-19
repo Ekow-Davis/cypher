@@ -15,7 +15,15 @@ import ReadabilityPanel from '@/components/ReadabilityPanel.vue'
 import InputExtrasPanel from '@/components/InputExtrasPanel.vue'
 import StatsSettingsPanel from '@/components/StatsSettingsPanel.vue'
 import TextRulesPanel from '@/components/TextRulesPanel.vue'
-import { usePreferencesStore, type FocusWidth } from '@/stores/preferences'
+import NumberStepper from '@/components/NumberStepper.vue'
+import {
+  usePreferencesStore,
+  type FocusWidth,
+  TEXT_WIDTH_MIN,
+  TEXT_WIDTH_MAX,
+  TEXT_GUTTER_MIN,
+  TEXT_GUTTER_MAX
+} from '@/stores/preferences'
 import { useAppStore } from '@/stores/app'
 import {
   useThemeStore,
@@ -359,8 +367,83 @@ onMounted(async () => {
       </div>
 
       <div class="mb-5">
+        <div class="mb-1 flex items-center justify-between">
+          <span class="text-sm font-medium">Text width</span>
+          <NumberStepper
+            :model-value="prefs.textWidth"
+            :min="TEXT_WIDTH_MIN"
+            :max="TEXT_WIDTH_MAX"
+            :step="5"
+            zero-label="Fill"
+            title="Text width"
+            @update:model-value="prefs.setTextWidth"
+          />
+        </div>
+        <p class="mb-2 text-xs text-ink-dim">
+          Roughly how many characters fit on a line in the manuscript and lore editors — type a
+          number, use the arrows, or type 0 to fill the pane. Also in the writing toolbar.
+        </p>
+        <div class="flex items-center gap-3">
+          <input
+            type="range"
+            class="flex-1"
+            style="accent-color: var(--color-accent)"
+            :min="TEXT_WIDTH_MIN"
+            :max="TEXT_WIDTH_MAX"
+            :disabled="prefs.textWidth === 0"
+            :value="prefs.textWidth === 0 ? TEXT_WIDTH_MAX : prefs.textWidth"
+            @input="prefs.setTextWidth(Number(($event.target as HTMLInputElement).value))"
+          />
+          <label class="flex items-center gap-1.5 text-xs text-ink-dim">
+            <input
+              type="checkbox"
+              class="h-4 w-4"
+              :checked="prefs.textWidth === 0"
+              @change="prefs.setTextWidth(($event.target as HTMLInputElement).checked ? 0 : 65)"
+            />
+            Fill
+          </label>
+        </div>
+      </div>
+
+      <div class="mb-5">
+        <div class="mb-1 flex items-center justify-between">
+          <span class="text-sm font-medium">Side margins</span>
+          <NumberStepper
+            :model-value="prefs.textGutter"
+            :min="TEXT_GUTTER_MIN"
+            :max="TEXT_GUTTER_MAX"
+            :step="4"
+            unit="px"
+            title="Side margins"
+            @update:model-value="prefs.setTextGutter"
+          />
+        </div>
+        <p class="mb-2 text-xs text-ink-dim">The minimum space kept either side of the text.</p>
+        <input
+          type="range"
+          class="w-full"
+          style="accent-color: var(--color-accent)"
+          :min="TEXT_GUTTER_MIN"
+          :max="TEXT_GUTTER_MAX"
+          step="4"
+          :value="prefs.textGutter"
+          @input="prefs.setTextGutter(Number(($event.target as HTMLInputElement).value))"
+        />
+      </div>
+
+      <div class="mb-5">
         <div class="mb-1 text-sm font-medium">Focus mode width</div>
         <p class="mb-2 text-xs text-ink-dim">How wide the text column sits in focus mode.</p>
+        <label class="mb-2 flex items-center gap-2 text-xs text-ink-dim">
+          <input
+            type="checkbox"
+            class="h-4 w-4"
+            :checked="prefs.focusUsesTextWidth"
+            @change="prefs.setFocusUsesTextWidth(($event.target as HTMLInputElement).checked)"
+          />
+          Use the normal text width instead
+        </label>
         <div class="grid grid-cols-3 gap-1">
           <button
             v-for="c in FOCUS_CHOICES"

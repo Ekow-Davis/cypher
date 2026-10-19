@@ -60,6 +60,7 @@ export function installSync(): void {
           if (insights.bookId != null) await insights.loadForBook(insights.bookId)
           break
         case 'books':
+        case 'shelf':
           await books.load()
           break
         case 'reader':

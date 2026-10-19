@@ -4,7 +4,9 @@ import { ref } from 'vue'
 export type FocusWidth = 'narrow' | 'medium' | 'wide'
 export type DocsView = 'list' | 'grid'
 export type PageView = 'paged' | 'continuous'
-export type PageMargin = 'narrow' | 'normal' | 'wide'
+export type PageMargin = 'narrow' | 'normal' | 'wide' | 'custom'
+export type ShelfView = 'grid' | 'list'
+export type ShelfSort = 'edited' | 'created' | 'title'
 
 const KEY = 'editorPrefs'
 
@@ -12,6 +14,21 @@ export const DEFAULT_EDITOR_SIZE = 16
 export const EDITOR_SIZE_MIN = 12
 export const EDITOR_SIZE_MAX = 32
 export const UI_SCALES = [0.9, 1, 1.1, 1.25, 1.4, 1.6] as const
+
+/**
+ * Width of the manuscript/lore text column, in characters (ch). 0 means the
+ * column fills whatever space the panes leave. 65 matches the old fixed width.
+ */
+export const DEFAULT_TEXT_WIDTH = 65
+export const TEXT_WIDTH_MIN = 40
+export const TEXT_WIDTH_MAX = 160
+/** Side padding around the text column, in px — the "margin" when width is full. */
+export const DEFAULT_TEXT_GUTTER = 24
+export const TEXT_GUTTER_MIN = 0
+export const TEXT_GUTTER_MAX = 160
+/** Custom Document page margin limits, in inches. */
+export const CUSTOM_MARGIN_MIN = 0.25
+export const CUSTOM_MARGIN_MAX = 2.5
 
 /** A key plus modifiers, matched on the physical key so layouts and Shift don't matter. */
 export interface Shortcut {
@@ -90,6 +107,16 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const docsView = ref<DocsView>('list')
   const pageView = ref<PageView>('paged')
   const pageMargin = ref<PageMargin>('normal')
+  /** Page margin in inches when pageMargin is 'custom'. */
+  const customMargin = ref(0.75)
+  /** Manuscript/lore column width in ch; 0 = fill the available space. */
+  const textWidth = ref(DEFAULT_TEXT_WIDTH)
+  /** Space kept either side of the column, in px. */
+  const textGutter = ref(DEFAULT_TEXT_GUTTER)
+  /** Whether focus mode uses its own preset width or the same as normal writing. */
+  const focusUsesTextWidth = ref(false)
+  const shelfView = ref<ShelfView>('grid')
+  const shelfSort = ref<ShelfSort>('edited')
   /** Writing text size in px for the manuscript and lore editors. */
   const editorFontSize = ref(DEFAULT_EDITOR_SIZE)
   /** Whole-interface scale — menus, sidebars and text alike. 1 is 100%. */
@@ -122,8 +149,18 @@ export const usePreferencesStore = defineStore('preferences', () => {
         if (typeof raw.editorFont === 'string') editorFont.value = raw.editorFont
         if (raw.docsView === 'grid' || raw.docsView === 'list') docsView.value = raw.docsView
         if (raw.pageView === 'paged' || raw.pageView === 'continuous') pageView.value = raw.pageView
-        if (raw.pageMargin === 'narrow' || raw.pageMargin === 'normal' || raw.pageMargin === 'wide')
+        if (['narrow', 'normal', 'wide', 'custom'].includes(raw.pageMargin as string))
           pageMargin.value = raw.pageMargin as PageMargin
+        if (typeof raw.customMargin === 'number')
+          customMargin.value = clamp(raw.customMargin, CUSTOM_MARGIN_MIN, CUSTOM_MARGIN_MAX)
+        if (typeof raw.textWidth === 'number')
+          textWidth.value = raw.textWidth === 0 ? 0 : clamp(raw.textWidth, TEXT_WIDTH_MIN, TEXT_WIDTH_MAX)
+        if (typeof raw.textGutter === 'number')
+          textGutter.value = clamp(raw.textGutter, TEXT_GUTTER_MIN, TEXT_GUTTER_MAX)
+        if (typeof raw.focusUsesTextWidth === 'boolean') focusUsesTextWidth.value = raw.focusUsesTextWidth
+        if (raw.shelfView === 'grid' || raw.shelfView === 'list') shelfView.value = raw.shelfView
+        if (['edited', 'created', 'title'].includes(raw.shelfSort as string))
+          shelfSort.value = raw.shelfSort as ShelfSort
         if (typeof raw.editorFontSize === 'number')
           editorFontSize.value = clamp(raw.editorFontSize, EDITOR_SIZE_MIN, EDITOR_SIZE_MAX)
         if (typeof raw.uiScale === 'number') uiScale.value = clamp(raw.uiScale, 0.75, 2)
@@ -169,6 +206,12 @@ export const usePreferencesStore = defineStore('preferences', () => {
         docsView: docsView.value,
         pageView: pageView.value,
         pageMargin: pageMargin.value,
+        customMargin: customMargin.value,
+        textWidth: textWidth.value,
+        textGutter: textGutter.value,
+        focusUsesTextWidth: focusUsesTextWidth.value,
+        shelfView: shelfView.value,
+        shelfSort: shelfSort.value,
         editorFontSize: editorFontSize.value,
         uiScale: uiScale.value,
         uiFont: uiFont.value,
@@ -200,6 +243,32 @@ export const usePreferencesStore = defineStore('preferences', () => {
   }
   function setPageMargin(v: PageMargin): void {
     pageMargin.value = v
+    void persist()
+  }
+  function setCustomMargin(inches: number): void {
+    if (!Number.isFinite(inches)) return
+    customMargin.value = Math.round(clamp(inches, CUSTOM_MARGIN_MIN, CUSTOM_MARGIN_MAX) * 100) / 100
+    pageMargin.value = 'custom'
+    void persist()
+  }
+  function setTextWidth(ch: number): void {
+    textWidth.value = ch <= 0 ? 0 : Math.round(clamp(ch, TEXT_WIDTH_MIN, TEXT_WIDTH_MAX))
+    void persist()
+  }
+  function setTextGutter(px: number): void {
+    textGutter.value = Math.round(clamp(px, TEXT_GUTTER_MIN, TEXT_GUTTER_MAX))
+    void persist()
+  }
+  function setFocusUsesTextWidth(on: boolean): void {
+    focusUsesTextWidth.value = on
+    void persist()
+  }
+  function setShelfView(v: ShelfView): void {
+    shelfView.value = v
+    void persist()
+  }
+  function setShelfSort(v: ShelfSort): void {
+    shelfSort.value = v
     void persist()
   }
   function setPageView(v: PageView): void {
@@ -287,6 +356,12 @@ export const usePreferencesStore = defineStore('preferences', () => {
     docsView,
     pageView,
     pageMargin,
+    customMargin,
+    textWidth,
+    textGutter,
+    focusUsesTextWidth,
+    shelfView,
+    shelfSort,
     editorFontSize,
     uiScale,
     uiFont,
@@ -309,6 +384,12 @@ export const usePreferencesStore = defineStore('preferences', () => {
     setDocsView,
     setPageView,
     setPageMargin,
+    setCustomMargin,
+    setTextWidth,
+    setTextGutter,
+    setFocusUsesTextWidth,
+    setShelfView,
+    setShelfSort,
     setEditorFontSize,
     setUiScale,
     stepUiScale,

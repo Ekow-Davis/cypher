@@ -85,7 +85,8 @@ import {
   Baseline
 } from 'lucide-vue-next'
 import { useDocumentsStore } from '@/stores/documents'
-import { usePreferencesStore } from '@/stores/preferences'
+import { usePreferencesStore, CUSTOM_MARGIN_MIN, CUSTOM_MARGIN_MAX } from '@/stores/preferences'
+import NumberStepper from '@/components/NumberStepper.vue'
 import { useFontsStore } from '@/stores/fonts'
 import type { DocComment, RunningAlign } from '@shared/types'
 import { assetUrl } from '@/lib/assets'
@@ -851,8 +852,10 @@ const MARGIN_PRESETS = [
   { key: 'normal', label: 'Normal', inches: 1 },
   { key: 'wide', label: 'Wide', inches: 1.3 }
 ] as const
-const marginIn = computed(
-  () => MARGIN_PRESETS.find((m) => m.key === prefs.pageMargin)?.inches ?? 1
+const marginIn = computed(() =>
+  prefs.pageMargin === 'custom'
+    ? prefs.customMargin
+    : (MARGIN_PRESETS.find((m) => m.key === prefs.pageMargin)?.inches ?? 1)
 )
 const showPreview = ref(false)
 
@@ -1365,7 +1368,26 @@ onBeforeUnmount(() => {
         >
           {{ m.label }}
         </button>
+        <button
+          class="rounded-md px-2 py-1 text-xs transition-colors"
+          :class="prefs.pageMargin === 'custom' ? 'bg-surface-2 text-accent' : 'text-ink-dim hover:text-ink'"
+          title="Set your own margin"
+          @click="prefs.setPageMargin('custom')"
+        >
+          Custom
+        </button>
       </div>
+      <NumberStepper
+        v-if="prefs.pageMargin === 'custom'"
+        :model-value="prefs.customMargin"
+        :min="CUSTOM_MARGIN_MIN"
+        :max="CUSTOM_MARGIN_MAX"
+        :step="0.05"
+        :decimals="2"
+        unit="in"
+        title="Page margin"
+        @update:model-value="prefs.setCustomMargin"
+      />
       <span class="doc-sep" />
       <button class="doc-btn" title="Print preview" @click="openPreview">
         <FileSearch :size="15" /> <span class="ml-1 text-xs">Preview</span>

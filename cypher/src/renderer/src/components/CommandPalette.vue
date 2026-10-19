@@ -135,7 +135,7 @@ const commands = computed<Command[]>(() => {
     { id: 'g:settings', group: 'Go to', label: 'Settings', icon: Settings, keywords: 'preferences', run: go('/settings') },
     { id: 'g:stats', group: 'Go to', label: 'Writing stats', icon: ChartLine, keywords: 'statistics analytics words charts', run: go('/stats') }
   )
-  for (const b of books.books) {
+  for (const b of books.active) {
     if (b.id === bookId.value) continue
     out.push({ id: `b:${b.id}`, group: 'Books', label: b.title, icon: BookText, run: go(`/book/${b.id}`) })
   }

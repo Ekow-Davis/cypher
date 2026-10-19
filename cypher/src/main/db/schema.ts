@@ -543,3 +543,22 @@ export function migration023(db: Database): void {
     );
   `)
 }
+
+/**
+ * Migration 024 — shelf folders.
+ *
+ * Folders are a local way of grouping books on the shelf. They never sync:
+ * a co-writer's shelf is theirs to arrange. A book with no folder sits loose.
+ */
+export function migration024(db: Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shelf_folders (
+      id          INTEGER PRIMARY KEY,
+      name        TEXT    NOT NULL,
+      sort_order  INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    ALTER TABLE books ADD COLUMN folder_id INTEGER REFERENCES shelf_folders(id) ON DELETE SET NULL;
+    CREATE INDEX IF NOT EXISTS idx_books_folder ON books(folder_id);
+  `)
+}

@@ -35,6 +35,7 @@ import {
   ListOrdered, SplitSquareVertical, Loader2 } from 'lucide-vue-next'
 import { useChaptersStore } from '@/stores/chapters'
 import WritingTextControls from '@/components/WritingTextControls.vue'
+import { useTextColumn } from '@/lib/textColumn'
 import WhenField from './WhenField.vue'
 import type { Chapter } from '@shared/types'
 
@@ -121,11 +122,8 @@ const editor = useEditor({
 /** The chapter on screen, for template bindings (loadedId itself isn't reactive). */
 const loadedChapterId = computed(() => props.chapter?.id ?? null)
 
-const FOCUS_WIDTH: Record<string, string> = {
-  narrow: 'max-w-xl',
-  medium: 'max-w-2xl',
-  wide: 'max-w-4xl'
-}
+// Column width and side gutter come from the writer's own settings.
+const { columnStyle, surfaceStyle } = useTextColumn(computed(() => app.focusMode))
 
 // ----- chapter metadata (separate from `status`, which is the save indicator) -----
 const showMeta = ref(false)
@@ -752,12 +750,8 @@ const tools: Tool[] = [
     </div>
 
     <!-- editor surface -->
-    <div class="flex-1 overflow-auto px-6" :class="app.focusMode ? 'py-16' : 'py-8'">
-      <EditorContent
-        :editor="editor"
-        class="mx-auto"
-        :class="app.focusMode ? FOCUS_WIDTH[prefs.focusWidth] : 'max-w-prose'"
-      />
+    <div class="flex-1 overflow-auto" :class="app.focusMode ? 'py-16' : 'py-8'" :style="surfaceStyle">
+      <EditorContent :editor="editor" :style="columnStyle" />
     </div>
 
     <!-- live counter; reports the selection when there is one -->
